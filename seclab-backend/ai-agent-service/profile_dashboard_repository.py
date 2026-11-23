@@ -37,7 +37,7 @@ DEFAULT_DASHBOARD = {
         "tags": [],
         "recentFocus": "",
         "comprehensiveScore": 0,
-        "evaluation": "暂无可用画像快照。完成题目、靶机和 AI 交互后，可重新生成学生画像。",
+        "evaluation": "暂无可用画像快照。完成课程练习、实验操作与 AI 对话后，可重新生成学生画像。",
     },
     "solveRecords": [],
 }

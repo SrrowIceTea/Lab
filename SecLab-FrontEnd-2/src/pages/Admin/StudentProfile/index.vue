@@ -165,7 +165,7 @@ watch(targetUserId, () => void fetchProfile(), { immediate: true })
         </div>
         <div class="stats rounded-lg border border-base-200 bg-base-100 shadow-sm">
           <div class="stat">
-            <div class="stat-title">完成课程</div>
+            <div class="stat-title">完成实验</div>
             <div class="stat-value text-secondary">{{ dashboard?.userStats?.completedCourses || 0 }}</div>
             <div class="stat-desc">个人画像统计</div>
           </div>

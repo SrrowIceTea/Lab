@@ -156,12 +156,13 @@ const EMPTY_PROFILE_MESSAGE = '暂无画像数据，完成课堂实践、使用 
 const PROFILE_LOAD_ERROR_MESSAGE = '画像数据加载失败，请稍后重试。'
 const EMPTY_RECOMMENDATIONS_MESSAGE = '暂无推荐任务'
 const RECOMMENDATION_PRACTICE_COUNT = 7
+// 与后端画像维度保持一致（ai-agent-service: DIMENSION_VIEW / capability_growth_service: DIMENSIONS）
 const EMPTY_SKILLS = [
-  { name: 'Web安全', score: 0, color: 'text-primary' },
-  { name: '系统安全', score: 0, color: 'text-secondary' },
-  { name: '密码学', score: 0, color: 'text-accent' },
-  { name: '逆向工程', score: 0, color: 'text-info' },
-  { name: '人工智能基础', score: 0, color: 'text-success' }
+  { name: '知识掌握', score: 0, color: 'text-primary' },
+  { name: '排障能力', score: 0, color: 'text-secondary' },
+  { name: '自主探索', score: 0, color: 'text-accent' },
+  { name: 'AI协同', score: 0, color: 'text-info' },
+  { name: '学习投入', score: 0, color: 'text-success' }
 ]
 const user = ref<User>({
   userId: 0,
@@ -178,8 +179,6 @@ const user = ref<User>({
 
 const editedUser = ref<User>({ ...user.value })
 const profileMajor = ref('')
-const completedExperiments = ref(0)
-const learningHours = ref(0)
 
 const isLoadingUserData = ref(false)
 const isEditing = ref(false)
@@ -459,8 +458,6 @@ function applyEmptyProfileBundle(loginUser?: LoginStorageUser | null) {
   }
   editedUser.value = { ...user.value }
   profileMajor.value = loginUser?.major || ''
-  completedExperiments.value = 0
-  learningHours.value = 0
   userStats.value = {
     completedCourses: 0,
     totalScore: 0,
@@ -533,13 +530,22 @@ const strongestSkill = computed(() => {
 
 const weakestSkill = computed(() => {
   const [first] = [...learningProfile.value.skills].sort((a, b) => a.score - b.score)
-  return first || { name: 'AI 应用能力', score: 0, color: 'text-secondary' }
+  return first || { name: 'AI协同', score: 0, color: 'text-info' }
 })
+
+// AI 协同维度得分：对应后端 DIMENSION_VIEW 的 ai_collaboration_score
+const aiCollaborationScore = computed(() => {
+  const skill = learningProfile.value.skills.find((item) => item.name.replace(/\s/g, '') === 'AI协同')
+  return Number(skill?.score || 0)
+})
+
+// 连续学习天数：后端 userStats.activeStreak 已计算，此前前端未展示
+const activeStreakDays = computed(() => Number(userStats.value.activeStreak || 0))
 
 const profileStageSummary = computed(() => {
   const score = Number(learningProfile.value.comprehensiveScore || 0)
   if (score <= 0) return { label: '待生成', desc: EMPTY_PROFILE_MESSAGE, badgeClass: 'badge-ghost' }
-  if (score >= 85) return { label: '稳定拔高期', desc: '已具备较强自主学习与复盘能力，可重点展示综合攻防与带队协作。', badgeClass: 'badge-success' }
+  if (score >= 85) return { label: '稳定拔高期', desc: '已具备较强的自主学习与人机协作能力，可尝试跨学科综合项目与同伴共创。', badgeClass: 'badge-success' }
   if (score >= 70) return { label: '能力成型期', desc: '基础能力稳定，正在通过专项训练补齐薄弱项，成长轨迹清晰可追踪。', badgeClass: 'badge-primary' }
   return { label: '重点提升期', desc: '画像已明确主要短板，系统正在围绕弱项持续生成针对性训练。', badgeClass: 'badge-warning' }
 })
@@ -567,7 +573,7 @@ const profileOverviewCards = computed<ProfileOverviewCard[]>(() => {
     {
       title: '最近更新',
       value: latestProfileComputedAt.value,
-      desc: '根据最近的课程练习和实战训练记录更新。',
+      desc: '根据课程练习、实验操作与 AI 对话记录综合更新。',
       badge: currentProfileSnapshotId.value ? '已更新' : '待更新',
       badgeClass: currentProfileSnapshotId.value ? 'badge-success' : 'badge-warning',
       icon: 'fa-camera-retro',
@@ -576,7 +582,9 @@ const profileOverviewCards = computed<ProfileOverviewCard[]>(() => {
     {
       title: '当前优势',
       value: hasScore ? `${strongestSkill.value.name} ${strongestSkill.value.score}` : '暂无',
-      desc: hasScore ? '基础概念掌握较稳定，适合继续挑战综合题。' : '当前账号暂无可展示的优势项目。',
+      desc: hasScore
+        ? `${strongestSkill.value.name}表现相对稳定，可把它迁移到更综合的 AI 学习任务中。`
+        : '当前账号暂无可展示的优势项目。',
       badge: hasScore ? '持续稳定' : '待生成',
       badgeClass: hasScore ? 'badge-info' : 'badge-ghost',
       icon: 'fa-medal',
@@ -585,7 +593,9 @@ const profileOverviewCards = computed<ProfileOverviewCard[]>(() => {
     {
       title: '下一步提升',
       value: hasScore ? `${weakestSkill.value.name} ${weakestSkill.value.score}` : '暂无',
-      desc: hasScore ? '后续练习会优先安排相关题目，帮助你逐步提升解题思路。' : '当前账号暂无学习反馈，完成练习后将生成提升建议。',
+      desc: hasScore
+        ? `后续训练会优先围绕${weakestSkill.value.name}生成针对性题目，帮助你补齐这一维度。`
+        : '当前账号暂无学习反馈，完成练习后将生成提升建议。',
       badge: hasScore ? '继续提升' : '待生成',
       badgeClass: hasScore ? 'badge-error' : 'badge-ghost',
       icon: 'fa-bullseye',
@@ -1769,8 +1779,6 @@ async function fetchUserData() {
     }
     editedUser.value = { ...user.value }
     profileMajor.value = loginUser?.major || ''
-    completedExperiments.value = 0
-    learningHours.value = 0
       pageNotice.value = ''
 
     await Promise.allSettled([
@@ -1823,7 +1831,7 @@ onBeforeUnmount(() => {
         <div class="card-body p-0">
           <div class="h-32 bg-gradient-to-r from-primary/20 via-secondary/20 to-accent/20 relative">
             <div class="absolute inset-0 flex items-center justify-center opacity-20">
-              <i class="fas fa-shield-alt text-7xl text-white"></i>
+              <i class="fas fa-brain text-7xl text-white"></i>
             </div>
           </div>
 
@@ -1882,7 +1890,7 @@ onBeforeUnmount(() => {
                   </div>
                   <div class="flex items-center gap-2 bg-base-200/60 px-3 py-2 rounded-lg">
                     <i class="fas fa-clock text-primary"></i>
-                    <span class="font-medium">{{ learningHours }}小时</span>
+                    <span class="font-medium">连续学习 {{ activeStreakDays }} 天</span>
                   </div>
                 </div>
               </div>
@@ -1891,9 +1899,9 @@ onBeforeUnmount(() => {
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
               <div class="stat bg-base-200/50 rounded-box p-4">
                 <div class="stat-figure text-primary">
-                  <i class="fas fa-star text-3xl"></i>
+                  <i class="fas fa-brain text-3xl"></i>
                 </div>
-                <div class="stat-title">综合得分</div>
+                <div class="stat-title">AI 学习力</div>
                 <div class="stat-value text-primary">{{ userStats.totalScore }}</div>
               </div>
               <div class="stat bg-base-200/50 rounded-box p-4">
@@ -1901,14 +1909,14 @@ onBeforeUnmount(() => {
                   <i class="fas fa-flask text-3xl"></i>
                 </div>
                 <div class="stat-title">完成实验</div>
-                <div class="stat-value text-secondary">{{ completedExperiments }}</div>
+                <div class="stat-value text-secondary">{{ userStats.completedCourses }}</div>
               </div>
               <div class="stat bg-base-200/50 rounded-box p-4">
                 <div class="stat-figure text-accent">
-                  <i class="fas fa-book-reader text-3xl"></i>
+                  <i class="fas fa-robot text-3xl"></i>
                 </div>
-                <div class="stat-title">完成课程</div>
-                <div class="stat-value text-accent">{{ userStats.completedCourses }}</div>
+                <div class="stat-title">AI 协同</div>
+                <div class="stat-value text-accent">{{ aiCollaborationScore }}</div>
               </div>
               <div class="stat bg-base-200/50 rounded-box p-4">
                 <div class="stat-figure text-success">
@@ -1961,7 +1969,7 @@ onBeforeUnmount(() => {
         <div class="card-body">
           <h2 class="text-xl font-semibold mb-6">
             <i class="fas fa-chart-pie text-secondary mr-2"></i>
-            学生学习画像分析
+            AI 学习画像分析
           </h2>
           <div v-if="isLoadingDashboard" class="text-sm text-base-content/60 mb-4">
             正在同步数据库画像...
@@ -1977,7 +1985,7 @@ onBeforeUnmount(() => {
                 :style="`--value:${learningProfile.comprehensiveScore}; --size:9rem; --thickness: 0.8rem;`"
               >
                 <span class="text-3xl font-bold">{{ learningProfile.comprehensiveScore }}</span>
-                <span class="text-sm opacity-70 block -mt-1">综合得分</span>
+                <span class="text-sm opacity-70 block -mt-1">AI 学习力</span>
               </div>
 
               <h3 class="text-lg font-medium mb-4 w-full text-center border-b border-base-300 pb-2">学习标签</h3>
@@ -1997,7 +2005,7 @@ onBeforeUnmount(() => {
             <div class="lg:col-span-2 p-6 bg-base-200/50 rounded-box flex flex-col justify-center">
               <h3 class="text-lg font-medium mb-6 flex items-center">
                 <i class="fas fa-layer-group text-primary mr-2"></i>
-                技能掌握度
+                AI 能力维度
               </h3>
               <div class="space-y-5 w-full">
                 <div v-for="(skill, index) in learningProfile.skills" :key="index" class="group">
@@ -2655,19 +2663,19 @@ onBeforeUnmount(() => {
           <div class="flex items-center justify-between mb-4">
             <h2 class="text-xl font-semibold flex items-center gap-2">
               <i class="fas fa-book-open text-secondary text-2xl"></i>
-              知识点专项训练（后续增强）
+              知识点专项训练
             </h2>
           </div>
 
           <p class="text-sm text-base-content/80 mb-6 leading-relaxed">
-            这一区域仍来自训练诊断链路，用于后续扩展知识点级专项训练。当前主推荐来源已经统一为上方画像推荐任务。
+            系统会把画像诊断出的薄弱知识点拆成小专题，点开即可进入对应训练；主推荐来源以上方画像推荐任务为准。
           </p>
 
           <div v-if="aiRecommendedTasks.generatedQuestions.length" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 hover:cursor-pointer">
             <div v-for="task in aiRecommendedTasks.generatedQuestions.slice(0, 4)" :key="task.id" class="card bg-base-100 shadow-md border hover:border-secondary transition-all hover:-translate-y-1">
               <figure class="px-4 pt-4 relative">
                 <div class="rounded-xl h-32 w-full bg-gradient-to-br from-secondary/20 via-primary/10 to-accent/20 flex items-center justify-center">
-                  <i class="fas fa-crosshairs text-4xl text-secondary/70"></i>
+                  <i class="fas fa-layer-group text-4xl text-secondary/70"></i>
                 </div>
                 <div class="absolute top-6 right-6 badge badge-error font-bold shadow-sm">{{ task.type }}</div>
               </figure>
@@ -2681,7 +2689,7 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <div v-else class="text-base-content/60 text-center py-6 bg-base-200/40 rounded-box">
-            当前未生成可展示的专项训练题目，主推荐请以上方画像推荐任务为准。
+            当前没有可展示的专项训练题目，可先从上方画像推荐任务开始。
           </div>
         </div>
       </div>
@@ -2709,10 +2717,10 @@ onBeforeUnmount(() => {
               强化专项训练
             </h2>
             <p class="text-sm text-base-content/60 mt-1">
-              逐题提交后会复用训练提交主链，并在触发画像重建后同步刷新本页数据。
+              逐题作答提交后，系统会重新分析你的表现，并同步更新画像与下一轮推荐。
             </p>
             <div class="mt-2 flex flex-wrap gap-2 text-xs text-base-content/50">
-              <span v-if="activeTrainingSessionId" class="badge badge-outline">Session {{ activeTrainingSessionId }}</span>
+              <span v-if="activeTrainingSessionId" class="badge badge-outline">训练编号 {{ activeTrainingSessionId }}</span>
             </div>
           </div>
           <button class="btn btn-outline btn-sm gap-2" @click="exitTraining">
