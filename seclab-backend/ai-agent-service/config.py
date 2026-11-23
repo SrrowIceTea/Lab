@@ -1,6 +1,6 @@
 import os
 
-from dotenv import load_dotenv
+from dotenv import dotenv_values, load_dotenv
 
 load_dotenv()
 
@@ -21,6 +21,61 @@ ENABLE_LOCAL_RAG = os.getenv("ENABLE_LOCAL_RAG", "true").lower() in ("true", "1"
 STRICT_SOURCE_EXAMPLE_VALIDATION = os.getenv(
     "STRICT_SOURCE_EXAMPLE_VALIDATION", "false"
 ).lower() in ("true", "1", "yes")
+
+# ── 文档 RAG：Embedding（SiliconFlow / OpenAI 兼容 /embeddings）────────
+# 用户选用 Qwen/Qwen3-Embedding-8B（输出维度默认 4096，可通过 dimensions 降维）
+EMBEDDING_API_BASE = os.getenv("EMBEDDING_API_BASE", "https://api.siliconflow.cn/v1")
+EMBEDDING_API_KEY = os.getenv("EMBEDDING_API_KEY", "")
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "Qwen/Qwen3-Embedding-8B")
+EMBEDDING_DIMENSIONS = int(os.getenv("EMBEDDING_DIMENSIONS", "1024"))
+EMBEDDING_TIMEOUT = int(os.getenv("EMBEDDING_TIMEOUT", "60"))
+ENABLE_DOCUMENT_RAG = os.getenv("ENABLE_DOCUMENT_RAG", "true").lower() in ("true", "1", "yes")
+DOC_CHUNK_SIZE = int(os.getenv("DOC_CHUNK_SIZE", "500"))
+DOC_CHUNK_OVERLAP = int(os.getenv("DOC_CHUNK_OVERLAP", "80"))
+DOC_TOP_K = int(os.getenv("DOC_TOP_K", "3"))
+
+
+def reload_embedding_config() -> dict:
+    """重新读取 .env 中的向量化配置。
+
+    教师填完 EMBEDDING_API_KEY 后，无需重启 AI 服务即可生效：
+    调用 /api/rag/config/reload 会走到这里，只覆盖 embedding / 文档 RAG 相关项，
+    其余配置（LLM、数据库等）保持进程启动时的值不变。
+    """
+    global EMBEDDING_API_BASE, EMBEDDING_API_KEY, EMBEDDING_MODEL, EMBEDDING_DIMENSIONS
+    global EMBEDDING_TIMEOUT, ENABLE_DOCUMENT_RAG, DOC_CHUNK_SIZE, DOC_CHUNK_OVERLAP, DOC_TOP_K
+
+    env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    file_values = dotenv_values(env_path) if os.path.exists(env_path) else {}
+
+    def pick(key: str, fallback: str) -> str:
+        value = file_values.get(key)
+        if value is None or value == "":
+            value = os.getenv(key, fallback)
+        return str(value).strip()
+
+    def pick_int(key: str, fallback: int) -> int:
+        try:
+            return int(pick(key, str(fallback)))
+        except ValueError:
+            return fallback
+
+    EMBEDDING_API_BASE = pick("EMBEDDING_API_BASE", "https://api.siliconflow.cn/v1")
+    EMBEDDING_API_KEY = pick("EMBEDDING_API_KEY", "")
+    EMBEDDING_MODEL = pick("EMBEDDING_MODEL", "Qwen/Qwen3-Embedding-8B")
+    EMBEDDING_DIMENSIONS = pick_int("EMBEDDING_DIMENSIONS", 1024)
+    EMBEDDING_TIMEOUT = pick_int("EMBEDDING_TIMEOUT", 60)
+    ENABLE_DOCUMENT_RAG = pick("ENABLE_DOCUMENT_RAG", "true").lower() in ("true", "1", "yes")
+    DOC_CHUNK_SIZE = pick_int("DOC_CHUNK_SIZE", 500)
+    DOC_CHUNK_OVERLAP = pick_int("DOC_CHUNK_OVERLAP", 80)
+    DOC_TOP_K = pick_int("DOC_TOP_K", 3)
+
+    return {
+        "embeddingConfigured": bool(EMBEDDING_API_KEY),
+        "model": EMBEDDING_MODEL,
+        "apiBase": EMBEDDING_API_BASE,
+        "dimensions": EMBEDDING_DIMENSIONS,
+    }
 
 # 兼容旧配置：若仍有人设置 DIFY_*，映射到通用配置（过渡期用）
 if not LLM_API_KEY and os.getenv("DIFY_API_KEY"):

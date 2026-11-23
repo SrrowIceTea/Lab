@@ -59,6 +59,7 @@ export interface LabContext {
   userId?: number | string | null
   classId?: number | string | null
   courseId?: number | string | null
+  courseName?: string
 }
 
 /**

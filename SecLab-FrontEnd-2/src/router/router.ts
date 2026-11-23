@@ -17,6 +17,7 @@ const TeacherOverview = () => import("../pages/Teacher/Overview/index.vue");
 const TeachingClasses = () => import("../pages/Teacher/TeachingClasses/index.vue");
 const TeacherTeachingAnalysis = () => import("../pages/Teacher/TeachingAnalysis/index.vue");
 const TeacherCourseLibrary = () => import("../pages/Teacher/CourseLibrary/index.vue");
+const TeacherCourseDocuments = () => import("../pages/Teacher/CourseDocuments/index.vue");
 const TeacherGeneratedQuestions = () => import("../pages/Teacher/GeneratedQuestions/index.vue");
 const Chat = () => import("../pages/User/Chat/index.vue");
 const FloatingChatDemo = () => import("../pages/User/Chat/FloatingChatDemo.vue");
@@ -87,6 +88,7 @@ export const router = createRouter({
                 { path: "classes", component: TeachingClasses },
                 { path: "analysis", component: TeacherTeachingAnalysis },
                 { path: "courses", component: TeacherCourseLibrary },
+                { path: "course-documents", component: TeacherCourseDocuments },
                 { path: "generated-questions", component: TeacherGeneratedQuestions },
             ],
         },

@@ -13,6 +13,7 @@ const navigation = [
   { label: '教学班', to: '/teacher/classes', icon: 'class' },
   { label: '教学分析', to: '/teacher/analysis', icon: 'analysis' },
   { label: '课程库', to: '/teacher/courses', icon: 'course' },
+  { label: '课程资料', to: '/teacher/course-documents', icon: 'docs' },
   { label: '生成题记录', to: '/teacher/generated-questions', icon: 'question' },
 ]
 
@@ -52,6 +53,7 @@ const logout = () => {
           <svg v-else-if="item.icon === 'class'" viewBox="0 0 24 24"><path d="M4 5h16v12H4zM8 21h8M12 17v4M7 9h4M7 12h7"/></svg>
           <svg v-else-if="item.icon === 'course'" viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v16H6.5a2.5 2.5 0 1 1 0-5H20M7 7h9"/></svg>
           <svg v-else-if="item.icon === 'analysis'" viewBox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M3 19h18M16 7l3-3M19 4v4M19 4h-4"/></svg>
+          <svg v-else-if="item.icon === 'docs'" viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7"/></svg>
           <svg v-else viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/></svg>
           <span>{{ item.label }}</span>
         </RouterLink>

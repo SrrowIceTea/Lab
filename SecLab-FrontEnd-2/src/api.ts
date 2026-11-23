@@ -3249,3 +3249,74 @@ export function subscribeGuidanceStream(
         controller.abort();
     };
 }
+
+// ── 文档 RAG：教师上传课程资料 ────────────────────────────────
+export interface RagDocumentDto {
+  sourceId: string;
+  courseId: number;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  chunkCount: number;
+  status: 'ready' | 'processing' | 'failed';
+  errorMessage: string | null;
+  createdAt: string | null;
+}
+
+export interface RagConfigDto {
+  enabled: boolean;
+  embeddingConfigured: boolean;
+  model: string;
+  chunkSize: number;
+  topK: number;
+}
+
+export async function getRagConfig(): Promise<RagConfigDto> {
+  const response = await axios.get<RagConfigDto>(`${AGENT_BASE_URL}/api/rag/config`);
+  return response.data;
+}
+
+/** 重新读取后端 .env 的向量化配置，填完 Key 无需重启服务 */
+export async function reloadRagConfig(): Promise<RagConfigDto & { reloaded: boolean }> {
+  const response = await axios.post(`${AGENT_BASE_URL}/api/rag/config/reload`, {}, getTeacherAgentAuthConfig());
+  return response.data;
+}
+
+export interface RagTestResultDto {
+  ok: boolean;
+  model: string;
+  dimensions: number;
+  latencyMs: number;
+}
+
+/** 真实调用一次向量模型，验证 Key 是否可用 */
+export async function testRagEmbedding(): Promise<RagTestResultDto> {
+  const response = await axios.post(`${AGENT_BASE_URL}/api/rag/test`, {}, getTeacherAgentAuthConfig());
+  return response.data;
+}
+
+export async function listRagDocuments(courseId?: number): Promise<RagDocumentDto[]> {
+  const response = await axios.get<{ items: RagDocumentDto[] }>(
+    `${AGENT_BASE_URL}/api/rag/documents`,
+    { params: courseId ? { courseId } : {}, ...getTeacherAgentAuthConfig() },
+  );
+  return response.data.items || [];
+}
+
+export async function uploadRagDocument(courseId: number, file: File): Promise<unknown> {
+  const form = new FormData();
+  form.append('courseId', String(courseId));
+  form.append('file', file);
+  const response = await axios.post(`${AGENT_BASE_URL}/api/rag/documents`, form, {
+    ...getTeacherAgentAuthConfig(),
+    headers: { ...getTeacherAgentAuthConfig().headers, 'Content-Type': 'multipart/form-data' },
+  });
+  return response.data;
+}
+
+export async function deleteRagDocument(sourceId: string, courseId?: number): Promise<void> {
+  await axios.delete(`${AGENT_BASE_URL}/api/rag/documents/${encodeURIComponent(sourceId)}`, {
+    params: courseId ? { courseId } : {},
+    ...getTeacherAgentAuthConfig(),
+  });
+}

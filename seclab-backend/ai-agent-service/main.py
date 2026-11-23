@@ -17,7 +17,7 @@ import re
 import time
 import httpx
 from datetime import date, datetime
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Security, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Security, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security.api_key import APIKeyHeader
@@ -30,6 +30,7 @@ import course_context
 import llm_client
 import video_companion_service
 import answer_coach_service
+import document_rag_service
 import docker_tools
 import operation_env
 import operation_session_repository as operation_session_repo
@@ -2475,6 +2476,108 @@ async def coach_variant(req: VariantRequest):
 
 
 # ─────────────────────────────────────────
+#  文档 RAG：教师上传 / 管理 / 学生检索
+# ─────────────────────────────────────────
+def _rag_config_payload() -> dict:
+    return {
+        "enabled": config.ENABLE_DOCUMENT_RAG,
+        "embeddingConfigured": document_rag_service.is_embedding_configured(),
+        "model": config.EMBEDDING_MODEL,
+        "chunkSize": config.DOC_CHUNK_SIZE,
+        "topK": config.DOC_TOP_K,
+    }
+
+
+@app.get("/api/rag/config")
+async def rag_config():
+    """前端展示 RAG 是否可用（不泄露 key）。"""
+    return _rag_config_payload()
+
+
+@app.post("/api/rag/config/reload")
+async def rag_config_reload(
+    current_user: dict[str, Any] = Depends(require_teacher_user),
+):
+    """重新读取 .env 中的向量化配置：填完 Key 不必重启服务。"""
+    reloaded = config.reload_embedding_config()
+    logger.info(
+        "向量化配置已重载：configured=%s model=%s",
+        reloaded["embeddingConfigured"],
+        reloaded["model"],
+    )
+    return {**_rag_config_payload(), "reloaded": True}
+
+
+@app.post("/api/rag/test")
+async def rag_test_embedding(
+    current_user: dict[str, Any] = Depends(require_teacher_user),
+):
+    """真实调用一次向量模型，验证 Key 是否可用。"""
+    try:
+        return await document_rag_service.probe_embedding()
+    except Exception as exc:  # noqa: BLE001 - 直接把原因回给教师端
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/rag/documents")
+async def rag_upload_document(
+    courseId: int = Form(...),
+    file: UploadFile = File(...),
+    current_user: dict[str, Any] = Depends(require_teacher_user),
+):
+    """教师为某门课程上传资料，自动切块+向量化入库。"""
+    if not document_rag_service.is_embedding_configured():
+        raise HTTPException(status_code=503, detail="尚未配置 EMBEDDING_API_KEY，无法导入文档")
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="文件为空")
+    if len(content) > 20 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="文件不能超过 20MB")
+    result = await document_rag_service.ingest_document(
+        course_id=courseId,
+        filename=file.filename or "untitled.txt",
+        content=content,
+        uploaded_by=int(current_user.get("user_id") or 0),
+    )
+    if not result.get("success"):
+        raise HTTPException(status_code=500, detail=result.get("error") or "文档导入失败")
+    return result
+
+
+@app.get("/api/rag/documents")
+async def rag_list_documents(
+    courseId: Optional[int] = Query(default=None),
+    current_user: dict[str, Any] = Depends(require_teacher_user),
+):
+    """列出课程资料（教师端管理用）。"""
+    return {"items": document_rag_service.list_sources(courseId)}
+
+
+@app.delete("/api/rag/documents/{source_id}")
+async def rag_delete_document(
+    source_id: str,
+    courseId: Optional[int] = Query(default=None),
+    current_user: dict[str, Any] = Depends(require_teacher_user),
+):
+    """删除课程资料及其所有向量块。"""
+    ok = document_rag_service.delete_source(source_id, courseId)
+    if not ok:
+        raise HTTPException(status_code=404, detail="资料不存在")
+    return {"success": True, "sourceId": source_id}
+
+
+@app.post("/api/rag/search")
+async def rag_search(
+    courseId: int = Form(...),
+    query: str = Form(...),
+    current_user: dict[str, Any] = Depends(require_authenticated_user),
+):
+    """学生端：在指定课程资料中检索相关片段（也可用于调试预览）。"""
+    hits = await document_rag_service.search(courseId, query)
+    return {"courseId": courseId, "query": query, "hits": hits}
+
+
+# ─────────────────────────────────────────
 #  视频伴侣：章节索引 / 摘要 / 播放位置上下文
 # ─────────────────────────────────────────
 @app.get("/api/video/chapters")
@@ -2899,6 +3002,21 @@ async def chat(req: ChatRequest):
         knowledge_units=knowledge_units,
         standard_questions=standard_questions,
     )
+
+    # 文档 RAG：检索教师为该课程上传的资料，注入 system prompt
+    rag_hits_count = 0
+    if course_id is not None and config.ENABLE_DOCUMENT_RAG:
+        try:
+            rag_hits = await document_rag_service.search(
+                course_id=int(course_id), query=req.query
+            )
+            if rag_hits:
+                system_prompt += document_rag_service.build_rag_context(
+                    int(course_id), req.query, rag_hits
+                )
+                rag_hits_count = len(rag_hits)
+        except Exception as exc:  # embedding 未配置/网络异常时不影响主对话
+            logger.warning("文档 RAG 检索失败，跳过：%s", exc)
     enriched_query = course_context.build_user_prompt(
         req.query, req.terminal_log, req.log_tail or 80
     )
@@ -2966,6 +3084,9 @@ async def chat(req: ChatRequest):
 
     async def event_stream():
         try:
+            # 先告诉前端本次回答参考了几段课程资料（教师上传的文档）
+            if rag_hits_count:
+                yield f"data: {json.dumps({'event': 'meta', 'ragHits': rag_hits_count, 'courseId': course_id}, ensure_ascii=False)}\n\n"
             async for event in llm_client.stream_chat(
                 messages, user=user, conversation_id=conversation_id
             ):

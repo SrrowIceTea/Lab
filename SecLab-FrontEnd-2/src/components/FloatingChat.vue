@@ -180,6 +180,11 @@
                   <span class="loading loading-dots loading-xs"></span>
                   <span class="text-xs">思考中...</span>
                 </div>
+                <!-- 课程资料引用提示 -->
+                <div v-if="message.ragHits" class="rag-cite">
+                  <i class="fas fa-book-open"></i>
+                  已参考本课程资料 {{ message.ragHits }} 段
+                </div>
               </div>
               <div class="chat-footer opacity-50 flex gap-1 text-xs">
                 <span>{{ formatTime(message.timestamp) }}</span>
@@ -276,6 +281,8 @@ interface AgentChunk {
   tool?: string
   tool_input?: string  // 工具调用入参（JSON 字符串）
   message?: string
+  ragHits?: number     // meta 事件：本次回答参考的课程资料段落数
+  courseId?: number | string
 }
 
 // 单次工具调用记录
@@ -296,6 +303,7 @@ interface Message {
   isStreaming?: boolean
   showThinking?: boolean
   toolCalls?: ToolCall[]  // 该消息产生的工具调用列表
+  ragHits?: number        // 本次回答参考了 N 段教师上传的课程资料
   // Phase 3: proactive guidance 主动提示字段
   isGuidance?: boolean
   signal_id?: string          // 关联 guidanceAlerts 中的 signal_id
@@ -349,8 +357,10 @@ const terminalLogText = computed(() =>
  */
 const lessonContext = computed(() => {
   const ctx = currentLabContext.value
-  const rawId = ctx.moduleId ?? ctx.experimentId ?? ctx.courseId
-  const moduleId = Number(rawId)
+  // 只有 moduleId / experimentId 才对应 aiModules 里的实践模块；
+  // courseId 是课程主键，不能拿去找模块，否则会把课程误认成第 N 个实践模块。
+  const rawModuleId = ctx.moduleId ?? ctx.experimentId
+  const moduleId = Number(rawModuleId)
   const lesson = Number.isFinite(moduleId) && moduleId > 0
     ? findAiModuleById(moduleId)
     : undefined
@@ -373,6 +383,7 @@ const lessonContext = computed(() => {
     experimentId: ctx.experimentId ?? null,
     experimentTitle: ctx.experimentTitle ?? lesson?.name ?? '',
     courseId: ctx.courseId ?? lesson?.id ?? null,
+    courseName: ctx.courseName ?? '',
     category: lesson?.category ?? '',
     currentTask: ctx.currentTask ?? lesson?.taskPoints[0]?.name ?? '',
     labSessionId: ctx.labSessionId ?? '',
@@ -610,6 +621,11 @@ const callAgent = async (userQuestion: string, messageIndex: number) => {
           // 保存 conversation_id 用于多轮对话
           if (chunk.conversation_id) {
             conversationId.value = chunk.conversation_id
+          }
+
+          // 课程资料检索命中（教师上传文档的 RAG）
+          if (chunk.event === 'meta' && chunk.ragHits) {
+            messages.value[messageIndex].ragHits = chunk.ragHits
           }
 
           // Agent 思考步骤（仅保留工具调用卡片，不显示纯思考文字）
@@ -1044,5 +1060,17 @@ watch(guidanceAlerts, () => {
   justify-content: center;
   align-items: center;
   height: 100%;
+}
+
+.rag-cite {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0 0.5rem 0.4rem;
+  padding: 0.12rem 0.5rem;
+  border-radius: 0.6rem;
+  font-size: 0.68rem;
+  color: hsl(var(--su));
+  background-color: hsl(var(--su) / 0.12);
 }
 </style> 

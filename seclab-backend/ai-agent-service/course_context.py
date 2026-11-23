@@ -68,13 +68,16 @@ def build_system_prompt(
     course_section: List[str] = ["\n## 当前学习情境"]
     module_name = ctx.get("moduleName") or ctx.get("experimentTitle")
     course_id = ctx.get("courseId")
+    course_name = ctx.get("courseName")
     module_id = ctx.get("moduleId") or ctx.get("experimentId")
     current_task = ctx.get("currentTask")
     session_id = ctx.get("labSessionId")
 
     if module_name:
         course_section.append(f"- 当前课程/实践：{module_name}")
-    if course_id is not None:
+    if course_name:
+        course_section.append(f"- 所在课程：{course_name}")
+    if course_id is not None and not course_name:
         course_section.append(f"- 讲次编号：第 {course_id} 讲")
     elif module_id is not None:
         course_section.append(f"- 模块编号：{module_id}")

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { getCourseVideoUrl, getCourseVideoUrlCandidates } from '../../../utils/videoUrl'
-import { setVideoPosition, clearVideoPosition } from '../../../composables/useLabState'
+import { setVideoPosition, clearVideoPosition, setLabContext } from '../../../composables/useLabState'
 
 // 定义课程接口
 
@@ -443,6 +443,17 @@ onMounted(() => {
   }, 100)
 })
 
+// 把当前课程写进全局上下文：右下角 AI 助手据此检索教师为该课程上传的资料（RAG）
+watch(
+  () => [course.value?.id, course.value?.name] as const,
+  ([id, name]) => {
+    if (id) {
+      setLabContext({ courseId: Number(id), courseName: name || '' })
+    }
+  },
+  { immediate: true }
+)
+
 // 用户信息
 const userInfo = ref({
   userName: '',
@@ -596,7 +607,11 @@ watch(lectureId, (id) => {
   if (id) void loadCompanion(id)
 }, { immediate: true })
 
-onUnmounted(() => clearVideoPosition())
+onUnmounted(() => {
+  clearVideoPosition()
+  // 离开课程页时清掉课程上下文，避免影响其他页面的对话
+  setLabContext({ courseId: null, courseName: '' })
+})
 
 function openCompanion() {
   companionOpen.value = true
