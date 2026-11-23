@@ -88,7 +88,7 @@ const runTest = async () => {
   testResult.value = ''
   try {
     const result = await testRagEmbedding()
-    testResult.value = `连接正常 · ${result.dimensions} 维 · ${result.latencyMs}ms`
+    testResult.value = `连接正常 · ${result.dimensions} 维 · ${result.latencyMs}ms${result.note ? ` · ${result.note}` : ''}`
   } catch (err: unknown) {
     testResult.value = ''
     error.value = getApiErrorMessage(err, '向量模型连接失败。')

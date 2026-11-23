@@ -31,6 +31,9 @@ try:
 except ImportError:  # 无 numpy 时用纯 Python 兜底
     _HAS_NUMPY = False
 
+# Embedding 接口是否支持 dimensions 降维：None 未知，False 已知不支持
+_DIMENSIONS_SUPPORTED: Optional[bool] = None
+
 
 # ─────────────────────────────────────────
 #  表结构
@@ -89,7 +92,13 @@ def is_embedding_configured() -> bool:
 
 
 async def embed_texts(texts: List[str]) -> List[List[float]]:
-    """调用 SiliconFlow / OpenAI 兼容的 /embeddings 接口。"""
+    """调用 SiliconFlow / OpenAI 兼容的 /embeddings 接口。
+
+    不同供应商对 dimensions（MRL 降维）支持程度不一：
+    首次带 dimensions 请求，若被 400/422 拒绝就自动去掉并重试，之后本次进程内不再携带。
+    """
+    global _DIMENSIONS_SUPPORTED
+
     if not is_embedding_configured():
         raise RuntimeError("未配置 EMBEDDING_API_KEY，请在 .env 中填写硅基流动 API Key")
 
@@ -100,18 +109,28 @@ async def embed_texts(texts: List[str]) -> List[List[float]]:
         "input": texts,
     }
     # dimensions 降维：Qwen3-Embedding-8B 默认 4096，降到 1024 大幅省存储、够用
-    if config.EMBEDDING_DIMENSIONS > 0:
+    if config.EMBEDDING_DIMENSIONS > 0 and _DIMENSIONS_SUPPORTED is not False:
         payload["dimensions"] = config.EMBEDDING_DIMENSIONS
 
+    headers = {
+        "Authorization": f"Bearer {config.EMBEDDING_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
     async with httpx.AsyncClient(timeout=config.EMBEDDING_TIMEOUT) as client:
-        resp = await client.post(
-            url,
-            headers={
-                "Authorization": f"Bearer {config.EMBEDDING_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-        )
+        resp = await client.post(url, headers=headers, json=payload)
+        if (
+            resp.status_code in (400, 422)
+            and "dimensions" in payload
+            and "dimension" in resp.text.lower()
+        ):
+            logger.warning("该 embedding 接口不支持 dimensions 参数，改为使用模型默认维度")
+            _DIMENSIONS_SUPPORTED = False
+            payload.pop("dimensions", None)
+            resp = await client.post(url, headers=headers, json=payload)
+        elif resp.status_code == 200:
+            _DIMENSIONS_SUPPORTED = True
+
         if resp.status_code != 200:
             raise RuntimeError(f"Embedding API HTTP {resp.status_code}: {resp.text[:400]}")
         data = resp.json()
@@ -134,15 +153,15 @@ async def probe_embedding() -> Dict[str, Any]:
     latency_ms = int((time.perf_counter() - started) * 1000)
     dim = len(vectors[0]) if vectors and vectors[0] else 0
     expected = config.EMBEDDING_DIMENSIONS
+    note = ""
     if expected > 0 and dim != expected:
-        raise RuntimeError(
-            f"向量维度不一致：接口返回 {dim}，配置为 {expected}，请检查 EMBEDDING_DIMENSIONS"
-        )
+        note = f"接口返回 {dim} 维（配置为 {expected} 维，将按实际维度存储）"
     return {
         "ok": True,
         "model": config.EMBEDDING_MODEL,
         "dimensions": dim,
         "latencyMs": latency_ms,
+        "note": note,
     }
 
 

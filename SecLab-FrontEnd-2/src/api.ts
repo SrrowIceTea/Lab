@@ -3287,6 +3287,7 @@ export interface RagTestResultDto {
   model: string;
   dimensions: number;
   latencyMs: number;
+  note?: string;
 }
 
 /** 真实调用一次向量模型，验证 Key 是否可用 */
