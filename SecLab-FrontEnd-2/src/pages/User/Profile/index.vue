@@ -152,7 +152,7 @@ type ProfileOverviewCard = {
 const cookie = useCookie()
 const router = useRouter()
 const STORAGE_USER_KEYS = ['userInfo', 'currentUser', 'user', 'loginUser', 'loginData', 'tokenUser', 'studentInfo', 'auth_student_number']
-const EMPTY_PROFILE_MESSAGE = '暂无画像数据，完成实验、提交 Flag 或使用 AI 助手后将生成画像。'
+const EMPTY_PROFILE_MESSAGE = '暂无画像数据，完成课堂实践、使用 AI 助手后将生成画像。'
 const PROFILE_LOAD_ERROR_MESSAGE = '画像数据加载失败，请稍后重试。'
 const EMPTY_RECOMMENDATIONS_MESSAGE = '暂无推荐任务'
 const RECOMMENDATION_PRACTICE_COUNT = 7
@@ -161,7 +161,7 @@ const EMPTY_SKILLS = [
   { name: '系统安全', score: 0, color: 'text-secondary' },
   { name: '密码学', score: 0, color: 'text-accent' },
   { name: '逆向工程', score: 0, color: 'text-info' },
-  { name: '渗透测试', score: 0, color: 'text-success' }
+  { name: '人工智能基础', score: 0, color: 'text-success' }
 ]
 const user = ref<User>({
   userId: 0,
@@ -306,7 +306,7 @@ function repairMojibakeText(input: string): string {
 
   // 策略 2：GBK 乱码修复 —— 已禁用
   // 原因：含有 CJK + ASCII 字母的文本既可能是乱码（"涓嶤SRF鍩虹"）也可能是正确文本
-  // （如 "已匹配真实模块「XSS and CSRF Basic Lab」"），无法可靠区分。
+  // （如 "已匹配真实模块「人工智能入门微课」"），无法可靠区分。
   // 此策略会将正确 UTF-8 编码后按 GBK 解码，导致正确文本被破坏成乱码。
   // 后端 _repair_double_encoded_utf8 已对数据库读取的数据做编码修复，前端无需重复。
   const hasGarbledMix = false
@@ -533,7 +533,7 @@ const strongestSkill = computed(() => {
 
 const weakestSkill = computed(() => {
   const [first] = [...learningProfile.value.skills].sort((a, b) => a.score - b.score)
-  return first || { name: '渗透测试', score: 0, color: 'text-secondary' }
+  return first || { name: 'AI 应用能力', score: 0, color: 'text-secondary' }
 })
 
 const profileStageSummary = computed(() => {

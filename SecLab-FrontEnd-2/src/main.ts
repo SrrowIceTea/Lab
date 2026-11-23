@@ -26,7 +26,6 @@ import shell from "highlight.js/lib/languages/shell";
 import typescript from "highlight.js/lib/languages/typescript";
 import markdown from "highlight.js/lib/languages/markdown";
 import css from "highlight.js/lib/languages/css";
-import dockerfile from "highlight.js/lib/languages/dockerfile";
 import '@vue-flow/core/dist/style.css';
 import '@vue-flow/core/dist/theme-default.css';
 hljs.registerLanguage("javascript", javascript);
@@ -47,7 +46,6 @@ hljs.registerLanguage("shell", shell);
 hljs.registerLanguage("typescript", typescript);
 hljs.registerLanguage("markdown", markdown);
 hljs.registerLanguage("css", css);
-hljs.registerLanguage("dockerfile", dockerfile);
 import "magic.css/dist/magic.min.css"
 import "animate.css"
 import { initThemeFromStorage } from './composables/useTheme'

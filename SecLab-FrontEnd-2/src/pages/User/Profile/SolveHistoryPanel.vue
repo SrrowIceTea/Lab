@@ -31,7 +31,7 @@ const filters = computed(() => [
 
 function sourceLabel(sourceType: string) {
   if (sourceType === 'generated_training') return '专项训练'
-  if (sourceType === 'flag') return 'Flag 提交'
+  if (sourceType === 'flag') return '实践作答'
   return '课程题'
 }
 
@@ -40,7 +40,7 @@ function questionTypeLabel(questionType: string) {
   if (normalized.includes('multiple')) return '多选题'
   if (normalized.includes('single') || normalized.includes('choice')) return '选择题'
   if (normalized.includes('short')) return '简答题'
-  if (normalized === 'flag') return 'Flag'
+  if (normalized === 'flag') return '实践作答'
   return questionType || '题目'
 }
 
@@ -174,7 +174,7 @@ function scoreText(score: number) {
         {{ records.length ? '这个筛选下暂无记录' : '暂无真实作答记录' }}
       </div>
       <p class="mt-1 text-sm text-base-content/50">
-        完成课程题、专项训练或 Flag 提交后会自动出现在这里。
+        完成课程题、专项训练或实践作答后会自动出现在这里。
       </p>
     </div>
   </section>

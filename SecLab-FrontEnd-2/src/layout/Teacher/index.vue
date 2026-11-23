@@ -31,10 +31,10 @@ const logout = () => {
     <div v-if="mobileOpen" class="nav-backdrop" @click="mobileOpen = false"></div>
     <aside class="teacher-nav" :class="{ open: mobileOpen }">
       <div class="brand">
-        <div class="brand-mark">S</div>
+        <div class="brand-mark">立</div>
         <div>
-          <strong>SecLab</strong>
-          <span>网络安全教学平台</span>
+          <strong>立心 LMS</strong>
+          <span>学习管理平台</span>
         </div>
       </div>
 

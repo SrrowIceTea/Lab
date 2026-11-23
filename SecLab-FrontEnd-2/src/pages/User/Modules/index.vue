@@ -19,152 +19,104 @@ const calculateScore = (difficulty: number, time: string): number => {
 const modules = ref<ModuleOverViewType[]>([
   {
     id: 1,
-    name: 'SQL注入基础实验',
-    description: '学习Web安全的基本概念和常见漏洞类型，包括SQL注入、XSS等。适合安全学习的入门者。',
-    difficulty: 3,
-    type: 'Web安全',
+    name: 'AI 应用大搜索',
+    description: '在身边找出 5 个 AI 应用场景，分析它们分别解决了什么问题。',
+    difficulty: 1,
+    type: '人工智能基础',
     status: 'available',
-    estimatedTime: '2-3小时',
-    score: calculateScore(3, '2-3小时') // 65分：难度3×15 + 3小时×5
+    estimatedTime: '1小时',
+    score: calculateScore(1, '1小时')
   },
   {
     id: 2,
-    name: 'XSS跨站脚本攻击实验',
-    description: '学习XSS跨站脚本攻击的原理、分类和防御方法，包括反射型、存储型和DOM型XSS。',
+    name: '图像识别初体验',
+    description: '用在线图像分类模型测试 10 张图片，记录识别结果并分析错误原因。',
     difficulty: 2,
-    type: 'Web安全',
+    type: '感知智能',
     status: 'available',
-    estimatedTime: '2-3小时',
-    score: calculateScore(2, '2-3小时') // 45分：难度2×15 + 3小时×5
+    estimatedTime: '1-2小时',
+    score: calculateScore(2, '1-2小时')
   },
   {
     id: 3,
-    name: 'CSRF跨站请求伪造实验',
-    description: '学习CSRF攻击的原理和防御方法，包括Token验证、同源检查等安全措施。',
-    difficulty: 3,
-    type: 'Web安全',
+    name: '让机器给句子分类',
+    description: '用情感分析工具处理影评文本，观察分词与词向量对结果的影响。',
+    difficulty: 2,
+    type: '感知智能',
     status: 'available',
-    estimatedTime: '3-4小时',
-    score: calculateScore(3, '3-4小时') // 65分：难度3×15 + 4小时×5
-  },  
+    estimatedTime: '1-2小时',
+    score: calculateScore(2, '1-2小时')
+  },
   {
     id: 4,
-    name: '命令注入漏洞实验',
-    description: '学习命令注入漏洞的原理、危害和防御方法，实践各种命令注入攻击技术。',
-    difficulty: 2,
-    type: 'Web安全', 
+    name: '搭一个知识图谱',
+    description: '为校园场景构建小型知识图谱，设计实体、关系与推理规则。',
+    difficulty: 3,
+    type: '认知与决策',
     status: 'available',
-    estimatedTime: '2小时',
-    score: calculateScore(2, '2小时') // 40分：难度2×15 + 2小时×5
+    estimatedTime: '1-2小时',
+    score: calculateScore(3, '1-2小时')
   },
   {
     id: 5,
-    name: '文件上传漏洞实验',
-    description: '学习文件上传漏洞的原理和利用方法，包括绕过客户端验证、服务器端验证等技术。',
+    name: '训练第一个分类器',
+    description: '用可视化平台训练鸢尾花分类模型，调参观察准确率的变化。',
     difficulty: 3,
-    type: 'Web安全',
+    type: '认知与决策',
     status: 'available',
-    estimatedTime: '2小时',
-    score: calculateScore(3, '2小时') // 55分：难度3×15 + 2小时×5
+    estimatedTime: '1-2小时',
+    score: calculateScore(3, '1-2小时')
   },
   {
     id: 6,
-    name: '目录遍历',
-    description: '学习目录遍历漏洞的原理和利用方法，包括路径遍历、敏感文件读取、目录遍历绕过等技术。通过实战演练掌握目录遍历漏洞的发现、利用和防护方法。',
-    difficulty: 3,
-    type: 'Web安全',
+    name: '设计一台服务机器人',
+    description: '围绕校园导览场景，画出机器人的感知—决策—执行闭环流程。',
+    difficulty: 2,
+    type: '具身智能',
     status: 'available',
-    estimatedTime: '2小时',
-    score: calculateScore(3, '2小时') // 55分：难度3×15 + 2小时×5
+    estimatedTime: '1-2小时',
+    score: calculateScore(2, '1-2小时')
   },
   {
     id: 7,
-    name: '组件漏洞挖掘',
-    description: '通过静态代码分析和动态测试发现第三方组件安全隐患，深入解析Shiro RememberMe反序列化、Fastjson JNDI注入、Log4j2远程代码执行等高危组件漏洞',
+    name: '多智能体协作推演',
+    description: '在仿真环境中为 3 个智能体设计协作策略，观察群体行为。',
     difficulty: 4,
-    type: 'Web安全',
-    status: 'locked',
-    estimatedTime: '3小时',
-    score: calculateScore(4, '3小时') // 70分：难度4×15 + 3小时×5
+    type: '具身智能',
+    status: 'available',
+    estimatedTime: '2小时',
+    score: calculateScore(4, '2小时')
   },
   {
     id: 8,
-    name: '业务逻辑漏洞实战',
-    description: '基于真实电商平台业务流程，系统训练水平越权、垂直越权、支付金额篡改、订单重放攻击等典型业务逻辑漏洞的发现与利用方法',
-    difficulty: 3,
-    type: 'Web安全',
-    status: 'locked',
-    prerequisites: [1, 2, 3],
-    estimatedTime: '3-4小时',
-    score: calculateScore(3, '3-4小时') // 65分：难度3×15 + 4小时×5
+    name: '搭建简易物理仿真',
+    description: '用物理引擎模拟小球碰撞，理解仿真环境如何生成训练数据。',
+    difficulty: 4,
+    type: '具身智能',
+    status: 'available',
+    estimatedTime: '2小时',
+    score: calculateScore(4, '2小时')
   },
   {
     id: 9,
-    name: '内网渗透技术',
-    description: '从外网突破到内网控制的完整渗透链路实践，包括边界突破、域环境信息收集、横向移动、域控提权等高级内网渗透技术',
-    difficulty: 5,
-    type: '网络攻防',
-    status: 'locked',
-    prerequisites: [4, 6, 7],
-    estimatedTime: '4-5小时',
-    score: calculateScore(5, '4-5小时') // 85分：难度5×15 + 5小时×5
+    name: '生成一段 AI 旋律',
+    description: '用 AI 作曲工具生成 8 小节旋律，比较不同风格参数的效果。',
+    difficulty: 2,
+    type: '智能创作',
+    status: 'available',
+    estimatedTime: '1小时',
+    score: calculateScore(2, '1小时')
   },
   {
     id: 10,
-    name: '代码审计进阶',
-    description: '使用静态分析与动态调试相结合的方法，基于真实开源CMS项目源码，系统训练漏洞点定位、参数流追踪、调用链分析等代码审计核心技能',
-    difficulty: 4,
-    type: '系统安全',
-    status: 'locked',
-    prerequisites: [6, 7],
-    estimatedTime: '3-4小时',
-    score: calculateScore(4, '3-4小时') // 75分：难度4×15 + 4小时×5
-  },
-  {
-    id: 11,
-    name: 'CTF综合实战',
-    description: '通过实战演练最新CTF赛题，全面提升Web渗透、二进制逆向、密码学、隐写分析等多领域安全技能，掌握高效解题思路与自动化工具开发方法',
-    difficulty: 5,
-    type: 'CTF',
-    status: 'locked',
-    prerequisites: [1, 2, 3, 4, 5],
-    estimatedTime: '5小时',
-    score: calculateScore(5, '5小时') // 100分：难度5×15 + 5小时×5
-  },
-  {
-    id: 12,
-    name: '红队武器库',
-    description: '系统学习红队实战武器装备的使用与定制，包括Cobalt Strike高级功能应用、木马免杀技术、社会工程学钓鱼攻击、网络侦查等红队核心战术与技术',
-    difficulty: 5,
-    type: '网络攻防',
-    status: 'locked',
-    prerequisites: [9],
-    estimatedTime: '4-5小时',
-    score: calculateScore(5, '4-5小时') // 100分：难度5×15 + 5小时×5
-  },
-  {
-    id: 13,
-    name: '漏洞挖掘方法论',
-    description: '系统讲解从发现到利用的完整漏洞挖掘流程，包括模糊测试技术应用、静态代码分析方法、动态调试技巧、漏洞验证与利用开发以及CVE申请全过程',
-    difficulty: 5,
-    type: '系统安全',
-    status: 'locked',
-    prerequisites: [10],
-    estimatedTime: '5小时',
-    score: calculateScore(5, '5小时') // 100分：难度5×15 + 5小时×5
-  },
-  {
-    id: 14,
-    name: '第三方框架漏洞',
-    description: '整漏洞挖掘流程，包包括Thinkphp多种典型漏洞利用、Struts2多种典型漏洞利用、Spring框架典型漏洞利用、若依框架典型漏洞利用等实验内容',
-    difficulty: 5,
-    type: '系统安全',
-    status: 'locked',
-    prerequisites: [10],
-    estimatedTime: '5小时',
-    score: calculateScore(5, '5小时') // 100分：难度5×15 + 5小时×5
+    name: '我的 AI 学习计划',
+    description: '结合十讲内容，制定一份面向自己的 AI 学习路线图。',
+    difficulty: 1,
+    type: '人工智能基础',
+    status: 'available',
+    estimatedTime: '1小时',
+    score: calculateScore(1, '1小时')
   }
-
 ])
 
 
@@ -175,7 +127,7 @@ onMounted(()=>{
   // })
 })
 
-// 开始实验：跳转到对应模块路径
+// 开始实践：跳转到对应模块路径
 const handleStartExperiment = (moduleId: number) => {
   router.push(`/user/module/${moduleId}`)
 }
@@ -188,7 +140,7 @@ const filters = ref({
 })
 
 // 类型列表 
-const types = ['Web安全', '系统安全', '密码学', '网络攻击与防御']
+const types = ['人工智能基础', '感知智能', '认知与决策', '具身智能', '智能创作']
 
 // 添加搜索关键词
 const searchQuery = ref('')
@@ -248,7 +200,7 @@ const stats = computed(() => ({
         <div class="stat-figure text-primary">
           <i class="fas fa-cube text-3xl"></i>
         </div>
-        <div class="stat-title">总实验数</div>
+        <div class="stat-title">实践模块数</div>
         <div class="stat-value text-primary">{{ stats.total }}</div>
       </div>
       
@@ -341,7 +293,7 @@ const stats = computed(() => ({
             </label>
             <input
               type="text" 
-              placeholder="搜索实验名称或描述..." 
+              placeholder="搜索实践名称或描述..." 
               class="input input-bordered w-full pl-11 pr-4 bg-base-100/70 focus:bg-base-100
                      transition-all duration-300 shadow-sm hover:shadow focus:shadow-md"
               v-model="searchQuery"
@@ -351,7 +303,7 @@ const stats = computed(() => ({
       </div>
     </div>
     
-    <!-- 实验列表 -->
+    <!-- 实践列表 -->
     <div v-if="filteredModules.length" 
          class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in">
       <ModuleOverView
@@ -367,7 +319,7 @@ const stats = computed(() => ({
       <div class="text-6xl mb-4 text-base-content/30">
         <i class="fas fa-search"></i>
       </div>
-      <h3 class="text-xl font-semibold mb-2">未找到匹配的实验</h3>
+      <h3 class="text-xl font-semibold mb-2">未找到匹配的实践</h3>
       <p class="text-base-content/70">
         试试调整筛选条件或重置筛选器
       </p>

@@ -145,6 +145,8 @@ class TeacherCourseAnalysisProviderTest(unittest.IsolatedAsyncioTestCase):
 
         with (
             patch.object(course_service, "collect_course_question_records", return_value=evidence),
+            # 业务代码仍以兼容别名 _call_dify_for_student_analysis 导入该调用，
+            # 该别名即 _call_llm_for_student_analysis；patch 旧名才能命中实际引用。
             patch.object(
                 course_service,
                 "_call_dify_for_student_analysis",

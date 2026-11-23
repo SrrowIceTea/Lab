@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import { getCourseVideoUrl, getCourseVideoUrlCandidates } from '../../../utils/videoUrl'
+import { setVideoPosition, clearVideoPosition } from '../../../composables/useLabState'
+
 // 定义课程接口
 
 import {useRoute, useRouter} from "vue-router";
-import { ref, onMounted, computed, type Ref } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch, type Ref } from 'vue'
 import { CourseStatus } from "./index";
 import type { Course } from "./index";
 import {getCourseDetail} from "../../../api.ts";
@@ -50,29 +53,35 @@ function updateLearningProgress() {
 // 添加课程资源
 const courseResources = ref([
   { name: '课程PPT', type: 'pdf', icon: 'file-pdf', size: '2.5MB' },
-  { name: '实验手册', type: 'doc', icon: 'file-word', size: '1.8MB' },
+  { name: '课堂学习单', type: 'doc', icon: 'file-word', size: '1.8MB' },
   { name: '参考资料', type: 'link', icon: 'link', url: '#' },
-  { name: '课程视频', type: 'video', icon: 'video', size: '108MB' }
+  { name: '课程视频', type: 'video', icon: 'video', size: '完整版' }
 ]);
 
 // 添加相关课程
 const relatedCourses = ref([
-  { id: 1, name: '网络安全基础', similarity: 95, students: 1280 },
-  { id: 2, name: '密码学原理', similarity: 82, students: 865 },
-  { id: 3, name: '数据加密与解密', similarity: 78, students: 742 }
+  { id: 2, name: '第2讲 机器眼中的大千世界', similarity: 95, students: 1280 },
+  { id: 5, name: '第5讲 机器自我成长进步', similarity: 88, students: 1105 },
+  { id: 9, name: '第9讲 舞动科技的音符', similarity: 76, students: 860 }
 ]);
 
-// 添加推荐实验数据，使用实际实验ID
+// 课堂实践任务（与十讲课程一一对应，ID 与模块种子保持一致）
 const recommendedExperiments = ref([
-  { id: 1, name: 'SQL注入基础实验', type: '实战演练', difficulty: 3, tags: ['Web安全', 'SQL注入'], estimatedTime: '2小时' },
-  { id: 2, name: 'XSS攻击防御实验', type: '实战演练', difficulty: 2, tags: ['Web安全', 'XSS'], estimatedTime: '1.5小时' },
-  { id: 3, name: 'CSRF漏洞利用实验', type: '实战演练', difficulty: 3, tags: ['Web安全', 'CSRF'], estimatedTime: '2.5小时' },
-  { id: 4, name: '文件上传漏洞实验', type: '实战演练', difficulty: 4, tags: ['Web安全', '文件上传'], estimatedTime: '3小时' }
+  { id: 1, name: 'AI 应用大搜索', type: '课堂实践', difficulty: 1, tags: ['AI发展史', '场景调研'], estimatedTime: '30分钟' },
+  { id: 2, name: '图像识别初体验', type: '课堂实践', difficulty: 2, tags: ['计算机视觉', '图像识别'], estimatedTime: '45分钟' },
+  { id: 3, name: '让机器给句子分类', type: '课堂实践', difficulty: 2, tags: ['自然语言处理', '情感分析'], estimatedTime: '45分钟' },
+  { id: 4, name: '搭一个知识图谱', type: '课堂实践', difficulty: 3, tags: ['认知推理', '知识图谱'], estimatedTime: '60分钟' },
+  { id: 5, name: '训练第一个分类器', type: '课堂实践', difficulty: 3, tags: ['机器学习', '分类模型'], estimatedTime: '60分钟' },
+  { id: 6, name: '设计一台服务机器人', type: '课堂实践', difficulty: 2, tags: ['智能机器人', '流程设计'], estimatedTime: '45分钟' },
+  { id: 7, name: '多智能体协作推演', type: '课堂实践', difficulty: 4, tags: ['多智能体', '协作策略'], estimatedTime: '60分钟' },
+  { id: 8, name: '搭建简易物理仿真', type: '课堂实践', difficulty: 4, tags: ['仿真模拟', '物理引擎'], estimatedTime: '60分钟' },
+  { id: 9, name: '生成一段 AI 旋律', type: '课堂实践', difficulty: 2, tags: ['AI音乐', '旋律生成'], estimatedTime: '40分钟' },
+  { id: 10, name: '我的 AI 学习计划', type: '课堂实践', difficulty: 1, tags: ['学习规划', 'AI素养'], estimatedTime: '30分钟' }
 ]);
 
-// 跳转到实验模块
+// 跳转到课堂实践模块
 const goToExperiment = (experimentId: number) => {
-  console.log(`跳转到实验模块: ${experimentId}`);
+  console.log(`跳转到课堂实践模块: ${experimentId}`);
   router.push(`/user/module/${experimentId}`);
 };
 
@@ -86,239 +95,225 @@ onMounted( async ()=>{
     const allCourses = [
       {
         id: 1,
-        name: 'SQL注入攻击',
-        description: '本课程详细讲解SQL注入攻击的原理、分类和防御技术。通过实际案例讲解如何发现和利用SQL注入漏洞，以及如何通过参数化查询、输入验证和最小权限原则等方法防止SQL注入攻击，保障Web应用的数据安全。',
-        difficulty: 3,
-        type: 'web',
-        tags: ['SQL注入', 'Web安全', '数据库安全'],
-        imageUrl: '/1.png',
-        costTime: 8,
-        schedule: '每周一 14:00-16:00',
+        name: '第1讲 人工智能的现状、趋势与战略',
+        description: '从 ChatGPT 到自动驾驶，梳理人工智能的发展脉络、关键技术路线与产业战略布局，建立对 AI 的整体认知。',
+        difficulty: 2,
+        type: 'ai-basic',
+        tags: ['AI发展史', '技术趋势', '战略布局'],
+        imageUrl: '/ai/01.svg',
+        costTime: 1,
+        schedule: '第 1 讲',
         status: 'active',
-        instructor: '张教授',
+        instructor: '北大 AI 微课讲师团',
         modules: [
           {
             moduleId: 1,
-            moduleName: 'SQL注入基础',
-            introduction: '学习SQL注入的基本原理和常见攻击方法',
-            type: ['Web安全', 'SQL注入'],
-            difficulty: 3
-          },
-          {
-            moduleId: 2,
-            moduleName: 'SQL注入防御',
-            introduction: '掌握SQL注入的防御技术和最佳实践',
-            type: ['Web安全', 'SQL注入'],
-            difficulty: 4
+            moduleName: 'AI 应用大搜索',
+            introduction: '在身边找出 5 个 AI 应用场景，分析它们解决了什么问题',
+            type: ['人工智能基础'],
+            difficulty: 1
           }
         ]
       },
       {
         id: 2,
-        name: 'XSS与CSRF攻击',
-        description: '本课程深入剖析跨站脚本(XSS)和跨站请求伪造(CSRF)攻击的原理和防御方法。通过实例讲解反射型XSS、存储型XSS和DOM型XSS攻击，以及CSRF攻击的实施过程，帮助学习者掌握Web前端安全防护的关键技术。',
-        difficulty: 2,
-        type: 'web',
-        tags: ['XSS', 'CSRF', 'Web安全'],
-        imageUrl: '/2.png',
-        costTime: 6,
-        schedule: '每周二 10:00-12:00',
+        name: '第2讲 机器眼中的大千世界：计算机视觉',
+        description: '看懂机器如何“看见”世界：图像采集、特征提取与卷积神经网络，理解人脸识别、自动驾驶感知背后的原理。',
+        difficulty: 3,
+        type: 'ai-perception',
+        tags: ['计算机视觉', '图像识别', '卷积神经网络'],
+        imageUrl: '/ai/02.svg',
+        costTime: 2,
+        schedule: '第 2 讲',
         status: 'active',
-        instructor: '李教授',
+        instructor: '北大 AI 微课讲师团',
         modules: [
           {
-            moduleId: 3,
-            moduleName: 'XSS攻击原理',
-            introduction: '了解XSS攻击的基本原理和分类',
-            type: ['Web安全', 'XSS'],
+            moduleId: 2,
+            moduleName: '图像识别初体验',
+            introduction: '用在线图像分类模型测试 10 张图片，记录识别结果与错误原因',
+            type: ['感知智能'],
             difficulty: 2
-          },
-          {
-            moduleId: 4,
-            moduleName: 'CSRF攻击防御',
-            introduction: '学习CSRF攻击的防御方法',
-            type: ['Web安全', 'CSRF'],
-            difficulty: 3
           }
         ]
       },
       {
         id: 3,
-        name: 'IDS和IPS系统',
-        description: '本课程介绍入侵检测系统(IDS)和入侵防御系统(IPS)的工作原理和部署策略。通过分析网络流量和系统行为，识别和防御各类网络攻击，包括异常检测、特征匹配和行为分析等技术，帮助学习者构建有效的网络安全防护体系。',
+        name: '第3讲 语言与机器的火花碰撞：自然语言处理',
+        description: '从分词、词向量到大语言模型，理解机器如何理解与生成人类语言，以及机器翻译、智能问答的实现思路。',
         difficulty: 3,
-        type: 'network',
-        tags: ['IDS', 'IPS', '网络安全'],
-        imageUrl: '/3.png',
-        costTime: 7,
-        schedule: '每周三 14:00-16:00',
+        type: 'ai-perception',
+        tags: ['自然语言处理', '大语言模型', '机器翻译'],
+        imageUrl: '/ai/03.svg',
+        costTime: 2,
+        schedule: '第 3 讲',
         status: 'active',
-        instructor: '王教授',
+        instructor: '北大 AI 微课讲师团',
         modules: [
           {
-            moduleId: 5,
-            moduleName: 'IDS系统原理',
-            introduction: '了解IDS系统的工作原理和部署方法',
-            type: ['网络安全', 'IDS'],
-            difficulty: 3
-          },
-          {
-            moduleId: 6,
-            moduleName: 'IPS系统配置',
-            introduction: '学习IPS系统的配置和管理',
-            type: ['网络安全', 'IPS'],
-            difficulty: 4
+            moduleId: 3,
+            moduleName: '让机器给句子分类',
+            introduction: '用情感分析工具处理影评文本，观察分词与词向量的作用',
+            type: ['感知智能'],
+            difficulty: 2
           }
         ]
       },
       {
         id: 4,
-        name: 'APT攻击分析',
-        description: '本课程深入分析高级持续性威胁(APT)攻击的特点和防御策略。通过实际APT攻击案例分析，介绍攻击者的战术、技术和程序(TTP)，以及如何建立有效的威胁情报和安全防御体系，提升组织抵御高级威胁的能力。',
+        name: '第4讲 认知科学与 AI 世界的邀约：认知推理',
+        description: '走进认知科学与 AI 的交叉地带：知识表示、逻辑推理与常识判断，看机器如何像人一样思考与决策。',
         difficulty: 4,
-        type: 'advanced',
-        tags: ['APT', '高级威胁', '网络安全'],
-        imageUrl: '/4.png',
-        costTime: 10,
-        schedule: '每周四 10:00-12:00',
+        type: 'ai-cognition',
+        tags: ['认知科学', '知识图谱', '逻辑推理'],
+        imageUrl: '/ai/04.svg',
+        costTime: 2,
+        schedule: '第 4 讲',
         status: 'active',
-        instructor: '赵教授',
+        instructor: '北大 AI 微课讲师团',
         modules: [
           {
-            moduleId: 7,
-            moduleName: 'APT攻击特征',
-            introduction: '识别APT攻击的特征和行为模式',
-            type: ['高级威胁', 'APT'],
-            difficulty: 4
-          },
-          {
-            moduleId: 8,
-            moduleName: 'APT防御策略',
-            introduction: '学习APT攻击的防御策略和最佳实践',
-            type: ['高级威胁', 'APT'],
-            difficulty: 5
+            moduleId: 4,
+            moduleName: '搭一个知识图谱',
+            introduction: '为校园场景构建小型知识图谱，设计实体、关系与推理规则',
+            type: ['认知与决策'],
+            difficulty: 3
           }
         ]
       },
       {
         id: 5,
-        name: '防火墙技术',
-        description: '本课程详细讲解网络防火墙的原理、类型和配置方法。包括包过滤防火墙、状态检测防火墙、应用层防火墙和下一代防火墙的特点与部署策略，以及访问控制列表(ACL)、NAT配置、VPN集成等实用技术，帮助学习者掌握网络边界防护的核心技能。',
+        name: '第5讲 机器自我成长进步：机器学习',
+        description: '从数据到模型：监督学习、无监督学习与强化学习的基本范式，动手理解机器如何从经验中自我进化。',
         difficulty: 3,
-        type: 'network',
-        tags: ['防火墙', '网络安全', '边界防护'],
-        imageUrl: '/5.png',
-        costTime: 8,
-        schedule: '每周五 14:00-16:00',
+        type: 'ai-cognition',
+        tags: ['机器学习', '神经网络', '强化学习'],
+        imageUrl: '/ai/05.svg',
+        costTime: 2,
+        schedule: '第 5 讲',
         status: 'active',
-        instructor: '钱教授',
+        instructor: '北大 AI 微课讲师团',
+        modules: [
+          {
+            moduleId: 5,
+            moduleName: '训练第一个分类器',
+            introduction: '用可视化平台训练一个鸢尾花分类模型，调参观察准确率变化',
+            type: ['认知与决策'],
+            difficulty: 3
+          }
+        ]
+      },
+      {
+        id: 6,
+        name: '第6讲 未来生活离不开的伙伴：智能机器人',
+        description: '认识身边的智能机器人：感知—决策—执行闭环、运动规划与人机协作，展望机器人在生活场景中的落地应用。',
+        difficulty: 2,
+        type: 'ai-embodied',
+        tags: ['智能机器人', '运动规划', '人机协作'],
+        imageUrl: '/ai/06.svg',
+        costTime: 1,
+        schedule: '第 6 讲',
+        status: 'active',
+        instructor: '北大 AI 微课讲师团',
+        modules: [
+          {
+            moduleId: 6,
+            moduleName: '设计一台服务机器人',
+            introduction: '围绕校园导览场景，画出机器人的感知—决策—执行流程',
+            type: ['具身智能'],
+            difficulty: 2
+          }
+        ]
+      },
+      {
+        id: 7,
+        name: '第7讲 机器世界不孤单：多智能体',
+        description: '当多个智能体同处一个世界：协作、博弈与群体智能，理解无人机编队、交通调度背后的多智能体系统。',
+        difficulty: 4,
+        type: 'ai-embodied',
+        tags: ['多智能体', '群体智能', '博弈协同'],
+        imageUrl: '/ai/07.svg',
+        costTime: 2,
+        schedule: '第 7 讲',
+        status: 'active',
+        instructor: '北大 AI 微课讲师团',
+        modules: [
+          {
+            moduleId: 7,
+            moduleName: '多智能体协作推演',
+            introduction: '在仿真环境中为 3 个智能体设计协作策略并观察群体行为',
+            type: ['具身智能'],
+            difficulty: 4
+          }
+        ]
+      },
+      {
+        id: 8,
+        name: '第8讲 机器生活的世界：物理世界仿真模拟',
+        description: '在虚拟世界中训练真实智能：物理引擎、数字孪生与仿真环境，理解 AI 如何借助模拟加速学习与验证。',
+        difficulty: 4,
+        type: 'ai-embodied',
+        tags: ['仿真模拟', '数字孪生', '物理引擎'],
+        imageUrl: '/ai/08.svg',
+        costTime: 2,
+        schedule: '第 8 讲',
+        status: 'active',
+        instructor: '北大 AI 微课讲师团',
+        modules: [
+          {
+            moduleId: 8,
+            moduleName: '搭建简易物理仿真',
+            introduction: '用物理引擎模拟小球碰撞，理解仿真环境如何生成训练数据',
+            type: ['具身智能'],
+            difficulty: 4
+          }
+        ]
+      },
+      {
+        id: 9,
+        name: '第9讲 舞动科技的音符：人工智能音乐',
+        description: 'AI 如何创作音乐：音频特征、旋律生成与风格迁移，体验人工智能在艺术创作中的可能性与边界。',
+        difficulty: 2,
+        type: 'ai-creative',
+        tags: ['AI音乐', '旋律生成', '风格迁移'],
+        imageUrl: '/ai/09.svg',
+        costTime: 1,
+        schedule: '第 9 讲',
+        status: 'active',
+        instructor: '北大 AI 微课讲师团',
         modules: [
           {
             moduleId: 9,
-            moduleName: '防火墙基础',
-            introduction: '了解防火墙的基本原理和类型',
-            type: ['网络安全', '防火墙'],
-            difficulty: 3
-          },
+            moduleName: '生成一段 AI 旋律',
+            introduction: '用 AI 作曲工具生成 8 小节旋律，比较不同风格参数的效果',
+            type: ['智能创作'],
+            difficulty: 2
+          }
+        ]
+      },
+      {
+        id: 10,
+        name: '第10讲 人工智能在北大',
+        description: '走进北京大学的 AI 课堂与实验室，了解人工智能的前沿研究方向与拔尖创新人才培养路径。',
+        difficulty: 1,
+        type: 'ai-basic',
+        tags: ['北大课堂', '前沿研究', 'AI人才培养'],
+        imageUrl: '/ai/10.svg',
+        costTime: 1,
+        schedule: '第 10 讲',
+        status: 'active',
+        instructor: '北大 AI 微课讲师团',
+        modules: [
           {
             moduleId: 10,
-            moduleName: '防火墙配置',
-            introduction: '学习防火墙的配置和管理',
-            type: ['网络安全', '防火墙'],
-            difficulty: 4
-          }
-        ]
-      },
-      {
-        id: 13,
-        name: '栈溢出攻击实战',
-        description: '本课程从栈结构原理出发，系统讲解栈溢出漏洞的成因与利用方法。通过在 Linux 操作环境中编写含后门的漏洞程序、使用 pwndbg 定位溢出偏移、用 pwntools 编写 exp 劫持函数返回地址，完成从理论到 getshell 的完整栈溢出学习闭环，掌握二进制安全基础与 PWN 核心技能。',
-        difficulty: 3,
-        type: 'system',
-        tags: ['栈溢出', '二进制安全', 'PWN'],
-        imageUrl: '/13.png',
-        costTime: 8,
-        schedule: '每周一 14:00-16:00',
-        status: 'active',
-        instructor: 'SecLab 教研组',
-        modules: [
-          {
-            moduleId: 15,
-            moduleName: '栈溢出实验',
-            introduction: '编写漏洞程序、定位溢出偏移、用 pwntools 编写 exp 劫持返回地址',
-            type: ['系统安全', '栈溢出'],
-            difficulty: 3
-          }
-        ]
-      },
-      {
-        id: 14,
-        name: '协议分析实战',
-        description: '本课程围绕网络协议分析展开，使用 Wireshark 对 HTTP、TCP、UDP 等常见协议进行深度抓包与解析。通过分析三次握手、HTTP 请求响应、明文传输风险与 HTTPS/TLS 加密防护，帮助学习者掌握网络流量分析方法，理解协议级安全风险与防护手段。',
-        difficulty: 3,
-        type: 'network',
-        tags: ['协议分析', 'Wireshark', '网络安全'],
-        imageUrl: '/14.png',
-        costTime: 8,
-        schedule: '每周二 14:00-16:00',
-        status: 'active',
-        instructor: 'SecLab 教研组',
-        modules: [
-          {
-            moduleId: 16,
-            moduleName: '协议分析实验',
-            introduction: '使用 Wireshark 抓包分析 HTTP/TCP 协议，理解明文传输与加密防护',
-            type: ['网络安全', '协议分析'],
-            difficulty: 3
-          }
-        ]
-      },
-      {
-        id: 15,
-        name: '堆溢出攻击实战',
-        description: '本课程深入讲解 glibc 堆管理机制与堆溢出利用技术。涵盖 chunk 结构、fastbin/smallbin 组织、unlink 利用、fastbin attack 等核心攻击手法，通过实战 exp 编写完成堆溢出利用与控制流劫持，提升二进制漏洞利用进阶能力。',
-        difficulty: 4,
-        type: 'system',
-        tags: ['堆溢出', '二进制安全', 'PWN'],
-        imageUrl: '/15.png',
-        costTime: 10,
-        schedule: '每周三 14:00-16:00',
-        status: 'active',
-        instructor: 'SecLab 教研组',
-        modules: [
-          {
-            moduleId: 17,
-            moduleName: '堆溢出实验',
-            introduction: '理解 glibc 堆管理，利用 unlink 与 fastbin attack 完成堆溢出利用',
-            type: ['系统安全', '堆溢出'],
-            difficulty: 5
-          }
-        ]
-      },
-      {
-        id: 16,
-        name: '格式化字符串漏洞实战',
-        description: '本课程系统讲解格式化字符串漏洞原理与利用。从 printf 函数机制出发，覆盖栈上任意地址泄露、利用 %n 完成任意地址写入、结合 GOT 表劫持与控制流转移等进阶技术，帮助学习者掌握这一经典且威力巨大的漏洞利用手法。',
-        difficulty: 4,
-        type: 'system',
-        tags: ['格式化字符串', '二进制安全', 'PWN'],
-        imageUrl: '/16.png',
-        costTime: 10,
-        schedule: '每周四 14:00-16:00',
-        status: 'active',
-        instructor: 'SecLab 教研组',
-        modules: [
-          {
-            moduleId: 18,
-            moduleName: '格式化字符串实验',
-            introduction: '利用 printf 格式化字符串漏洞完成栈泄露与任意地址写入',
-            type: ['系统安全', '格式化字符串'],
-            difficulty: 4
+            moduleName: '我的 AI 学习计划',
+            introduction: '结合十讲内容，制定一份面向自己的 AI 学习路线图',
+            type: ['人工智能基础'],
+            difficulty: 1
           }
         ]
       }
     ];
-    
     // 查找对应ID的课程
     const foundCourse = allCourses.find(c => c.id === courseIdNum);
     if (foundCourse) {
@@ -405,6 +400,20 @@ const getDifficultyStars = (difficulty: number | null) => {
   return '★'.repeat(difficulty) + '☆'.repeat(5 - difficulty);
 }
 
+// 课程类型的中文名称
+const TYPE_NAMES: Record<string, string> = {
+  'ai-basic': '人工智能基础',
+  'ai-perception': '感知智能',
+  'ai-cognition': '认知与决策',
+  'ai-embodied': '具身智能',
+  'ai-creative': '智能创作'
+};
+
+const getTypeName = (type: string | null) => {
+  if (!type) return '未分类';
+  return TYPE_NAMES[type] || type;
+};
+
 // 添加难度等级描述
 const getDifficultyText = (difficulty: number | null) => {
   if (difficulty === null) return '未知';
@@ -459,165 +468,191 @@ onMounted(async () => {
   }
 })
 
-// 获取推荐实验
+// 获取配套实践任务
 const getRecommendedExperiments = (courseId: number | null) => {
   if (!courseId) return [];
-  
-  // 根据课程ID返回相关实验
-  // 为每个课程返回1-2个相关实验
-  switch (courseId) {
-    case 1: // SQL注入攻防实战
-      return recommendedExperiments.value.filter(exp => exp.id === 1);
-    case 2: // XSS与CSRF攻防详解
-      return recommendedExperiments.value.filter(exp => [2, 3].includes(exp.id));
-    case 3: // IDS和IPS安全防护
-      return recommendedExperiments.value.filter(exp => exp.id === 1);
-    case 4: // APT攻击分析与防御
-      return recommendedExperiments.value.filter(exp => exp.id === 4);
-    case 5: // 防火墙技术与配置
-      return recommendedExperiments.value.filter(exp => exp.id === 1);
-    case 6: // 古典密码学基础
-      return recommendedExperiments.value.filter(exp => exp.id === 2);
-    case 7: // 公钥密码简介
-      return recommendedExperiments.value.filter(exp => exp.id === 2);
-    case 8: // RSA公钥加密方案
-      return recommendedExperiments.value.filter(exp => exp.id === 2);
-    case 9: // 数字签名技术
-      return recommendedExperiments.value.filter(exp => exp.id === 2);
-    case 10: // 操作系统安全概述
-      return recommendedExperiments.value.filter(exp => exp.id === 4);
-    case 11: // 可信计算技术
-      return recommendedExperiments.value.filter(exp => exp.id === 3);
-    case 12: // 网络安全概述
-      return recommendedExperiments.value.filter(exp => exp.id === 1);
-    default:
-      // 默认返回所有实验
-      return recommendedExperiments.value.slice(0, 2);
-  }
+
+  // 本讲任务优先，再补充下一讲任务作为延伸练习
+  const primary = recommendedExperiments.value.filter((exp) => exp.id === courseId);
+  const next = recommendedExperiments.value.filter((exp) => exp.id === courseId + 1);
+  return [...primary, ...next].slice(0, 2);
 };
 
-// 开始实验
+// 开始任务
 const startExperiment = (experimentId: number) => {
-  console.log(`开始实验: ${experimentId}`);
+  console.log(`开始任务: ${experimentId}`);
   router.push(`/user/module/${experimentId}`);
 };
 
-// 获取视频标题
-const getVideoTitle = (courseId: number | null, videoIndex: number) => {
+// 第 X 讲视频标题
+const VIDEO_TITLES: Record<number, string> = {
+  1: '第1讲 人工智能的现状、趋势与战略',
+  2: '第2讲 机器眼中的大千世界：计算机视觉',
+  3: '第3讲 语言与机器的火花碰撞：自然语言处理',
+  4: '第4讲 认知科学与 AI 世界的邀约：认知推理',
+  5: '第5讲 机器自我成长进步：机器学习',
+  6: '第6讲 未来生活离不开的伙伴：智能机器人',
+  7: '第7讲 机器世界不孤单：多智能体',
+  8: '第8讲 机器生活的世界：物理世界仿真模拟',
+  9: '第9讲 舞动科技的音符：人工智能音乐',
+  10: '第10讲 人工智能在北大',
+};
+
+// 第 X 讲视频简介
+const VIDEO_DESCRIPTIONS: Record<number, string> = {
+  1: '第1讲 人工智能的现状、趋势与战略 完整课程录像',
+  2: '计算机视觉 完整课程录像',
+  3: '自然语言处理 完整课程录像',
+  4: '认知推理 完整课程录像',
+  5: '机器学习 完整课程录像',
+  6: '智能机器人 完整课程录像',
+  7: '多智能体 完整课程录像',
+  8: '物理世界仿真模拟 完整课程录像',
+  9: '人工智能音乐 完整课程录像',
+  10: '第10讲 人工智能在北大 完整课程录像',
+};
+
+const getVideoTitle = (courseId: number | null, _videoIndex = 1) => {
   if (!courseId) return '未知视频';
-  switch (courseId) {
-    case 1:
-      return videoIndex === 1 ? 'SQL注入攻击' : (videoIndex === 2 ? 'XSS与CSRF' : 'IDS和IPS');
-    case 2:
-      return videoIndex === 1 ? 'XSS攻击防御' : (videoIndex === 2 ? 'CSRF漏洞利用' : '文件上传漏洞');
-    case 3:
-      return videoIndex === 1 ? 'IDS和IPS' : (videoIndex === 2 ? 'APT攻击分析' : '防火墙技术');
-    case 4:
-      return videoIndex === 1 ? 'APT攻击分析' : (videoIndex === 2 ? '操作系统安全' : '可信计算');
-    case 5:
-      return videoIndex === 1 ? '防火墙技术' : (videoIndex === 2 ? '古典密码学' : '公钥密码');
-    case 6:
-      return videoIndex === 1 ? '古典密码学' : (videoIndex === 2 ? '公钥密码' : 'RSA公钥加密');
-    case 7:
-      return videoIndex === 1 ? '公钥密码' : (videoIndex === 2 ? 'RSA公钥加密' : '数字签名');
-    case 8:
-      return videoIndex === 1 ? 'RSA公钥加密' : (videoIndex === 2 ? '数字签名' : '操作系统安全');
-    case 9:
-      return videoIndex === 1 ? '数字签名' : (videoIndex === 2 ? '操作系统安全' : '网络安全概述');
-    case 10:
-      return videoIndex === 1 ? '操作系统安全' : (videoIndex === 2 ? '可信计算' : '网络安全概述');
-    case 11:
-      return videoIndex === 1 ? '可信计算' : (videoIndex === 2 ? '网络安全概述' : '实战实验推荐');
-    case 12:
-      return videoIndex === 1 ? '网络安全概述' : (videoIndex === 2 ? '实战实验推荐' : '课程结束');
-    default:
-      return '未知视频';
-  }
+  return VIDEO_TITLES[courseId] || '未知视频';
 };
 
-// 获取视频描述
-const getVideoDescription = (courseId: number | null, videoIndex: number) => {
+const getVideoDescription = (courseId: number | null, _videoIndex = 1) => {
   if (!courseId) return '暂无描述';
-  switch (courseId) {
-    case 1:
-      return videoIndex === 1 ? '介绍SQL注入攻击的基本原理和常见类型' : (videoIndex === 2 ? '讲解XSS和CSRF的防御方法' : '介绍IDS和IPS的工作原理和区别');
-    case 2:
-      return videoIndex === 1 ? '讲解XSS攻击的防御措施' : (videoIndex === 2 ? '介绍CSRF漏洞的利用和防御' : '讲解文件上传漏洞的防御方法');
-    case 3:
-      return videoIndex === 1 ? '介绍IDS和IPS的工作原理' : (videoIndex === 2 ? '讲解APT攻击的分析方法' : '介绍防火墙技术的配置和作用');
-    case 4:
-      return videoIndex === 1 ? '讲解APT攻击的分析方法' : (videoIndex === 2 ? '介绍操作系统安全的概念' : '讲解可信计算技术的应用');
-    case 5:
-      return videoIndex === 1 ? '介绍防火墙技术的配置方法' : (videoIndex === 2 ? '讲解古典密码学的基本原理' : '介绍公钥密码的加密过程');
-    case 6:
-      return videoIndex === 1 ? '介绍古典密码学的基本原理' : (videoIndex === 2 ? '介绍公钥密码的加密过程' : '介绍RSA公钥加密的原理和应用');
-    case 7:
-      return videoIndex === 1 ? '介绍公钥密码的加密过程' : (videoIndex === 2 ? '介绍RSA公钥加密的原理和应用' : '介绍数字签名的作用');
-    case 8:
-      return videoIndex === 1 ? '介绍RSA公钥加密的原理和应用' : (videoIndex === 2 ? '介绍数字签名的作用' : '介绍操作系统安全的概念');
-    case 9:
-      return videoIndex === 1 ? '介绍数字签名的作用' : (videoIndex === 2 ? '介绍操作系统安全的概念' : '介绍网络安全概述');
-    case 10:
-      return videoIndex === 1 ? '介绍操作系统安全的概念' : (videoIndex === 2 ? '介绍可信计算技术的应用' : '介绍网络安全概述');
-    case 11:
-      return videoIndex === 1 ? '介绍可信计算技术的应用' : (videoIndex === 2 ? '介绍网络安全概述' : '介绍实战实验推荐');
-    case 12:
-      return videoIndex === 1 ? '介绍网络安全概述' : (videoIndex === 2 ? '介绍实战实验推荐' : '课程结束');
-    default:
-      return '暂无描述';
-  }
+  return VIDEO_DESCRIPTIONS[courseId] || '暂无描述';
 };
 
-const allCourses = ref([
-  { id: 1, name: 'SQL注入攻击' },
-  { id: 2, name: 'XSS与CSRF攻防详解' },
-  { id: 3, name: 'IDS和IPS安全防护' },
-  { id: 4, name: 'APT攻击分析与防御' },
-  { id: 5, name: '防火墙技术与配置' },
-  { id: 6, name: '古典密码学基础' },
-  { id: 7, name: '公钥密码简介' },
-  { id: 8, name: 'RSA公钥加密方案' },
-  { id: 9, name: '数字签名技术' },
-  { id: 10, name: '操作系统安全概述' },
-  { id: 11, name: '可信计算技术' },
-  { id: 12, name: '网络安全概述' },
-  { id: 13, name: '栈溢出攻击实战' },
-  { id: 14, name: '协议分析实战' },
-  { id: 15, name: '堆溢出攻击实战' },
-  { id: 16, name: '格式化字符串漏洞实战' }
-]);
-
-// ── 教学视频（阿里云 OSS 公共读）──────────────────────────
-// OSS bucket: seclab2026，地域: cn-hangzhou，权限: public-read
-// 前端直接拼接 URL 播放，无需后端签名。文件名含中文/空格需 encodeURIComponent。
-const OSS_BASE_URL =
-  import.meta.env.VITE_OSS_BASE_URL ||
-  'https://seclab2026.oss-cn-hangzhou.aliyuncs.com';
-
-// 课程 ID -> OSS 视频文件名映射（文件名与 bucket 内实际对象 key 一致）
-// 注：课程 2 的视频未在 OSS 中找到（已尝试多种文件名变体均 404），暂留空，
-//     页面会显示「该课程暂无视频」。上传后在此补充文件名即可。
-const COURSE_VIDEOS: Record<number, string> = {
-  1: '1.1Sql注入攻击.mp4',
-  2: '1.2Xss与csrf-.mp4',
-  3: '1.3 IDS和IPS.mp4',
-  4: '1.4Apt攻击.mp4',
-  5: '1.5防火墙.mp4',
-  6: '2.2 古典密码.mp4',
-  7: '2.4公钥密码简介.mp4',
-  8: '2.5 Rsa公钥加密方案.mp4',
-  9: '2.6数字签名.mp4',
-  10: '3.2 操作系统安全概述.mp4',
-  11: '3.4 可信计算.mp4',
-  12: '4.1.1 网络安全概述.mp4',
-};
-
-// 当前课程的视频 URL，无映射则返回空串（模板显示「暂无视频」占位）
+// 当前课程的视频地址（阿里云 OSS 公共读 bucket）
 const videoUrl = computed(() => {
-  const filename = COURSE_VIDEOS[course.value.id as number];
-  if (!filename) return '';
-  return `${OSS_BASE_URL}/${encodeURIComponent(filename)}`;
+  const id = course.value.id;
+  if (!id || id < 1 || id > 10) return '';
+  return getCourseVideoUrl(id);
 });
+
+// OSS 候选地址：先试 video/ 目录，再试桶根目录，避免上传目录不同导致 404
+const videoUrls = computed(() => {
+  const id = course.value.id;
+  if (!id || id < 1 || id > 10) return [];
+  return getCourseVideoUrlCandidates(id);
+});
+
+// ─────────────────────────────────────────
+//  视频伴侣：章节索引 / 三分钟摘要 / 讲中答疑
+// ─────────────────────────────────────────
+const AGENT_BASE_URL = import.meta.env.VITE_AGENT_BASE_URL || 'http://localhost:8010'
+const videoRef = ref<HTMLVideoElement | null>(null)
+const currentSeconds = ref(0)
+const chapters = ref<Array<{ index: number; start: string; startSec: number; end: string; title: string }>>([])
+const summary = ref('')
+const summaryLoading = ref(false)
+const companionOpen = ref(false)
+const askQuestion = ref('')
+const askAnswer = ref('')
+const asking = ref(false)
+const showSummary = ref(false)
+
+const lectureId = computed(() => {
+  const id = course.value?.id
+  return id && id >= 1 && id <= 10 ? id : 0
+})
+
+function onVideoTimeUpdate() {
+  if (videoRef.value) {
+    currentSeconds.value = Math.floor(videoRef.value.currentTime)
+    const id = lectureId.value
+    if (id) setVideoPosition(id, currentSeconds.value)
+  }
+}
+
+function seekTo(seconds: number) {
+  if (videoRef.value) {
+    videoRef.value.currentTime = seconds
+    videoRef.value.play().catch(() => {})
+  }
+}
+
+function formatTime(sec: number): string {
+  const m = Math.floor(sec / 60)
+  const s = Math.floor(sec % 60)
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+}
+
+async function loadCompanion(id: number) {
+  chapters.value = []
+  summary.value = ''
+  try {
+    const [chRes, sumRes] = await Promise.all([
+      fetch(`${AGENT_BASE_URL}/api/video/chapters?lecture=${id}`),
+      fetch(`${AGENT_BASE_URL}/api/video/summary?lecture=${id}`)
+    ])
+    if (chRes.ok) chapters.value = (await chRes.json()).chapters || []
+    if (sumRes.ok) summary.value = (await sumRes.json()).summary || ''
+  } catch (err) {
+    console.warn('视频伴侣数据加载失败:', err)
+  }
+}
+
+watch(lectureId, (id) => {
+  if (id) void loadCompanion(id)
+}, { immediate: true })
+
+onUnmounted(() => clearVideoPosition())
+
+function openCompanion() {
+  companionOpen.value = true
+  if (!askQuestion.value) askQuestion.value = '这里我没懂，请结合当前视频内容解释一下'
+}
+
+async function askAboutVideo() {
+  const id = lectureId.value
+  if (!id || !askQuestion.value.trim() || asking.value) return
+  asking.value = true
+  askAnswer.value = ''
+  try {
+    const response = await fetch(`${AGENT_BASE_URL}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: askQuestion.value.trim(),
+        conversation_id: '',
+        user: 'student',
+        inputs: {},
+        lab_context: {
+          moduleId: id,
+          moduleName: course.value?.name || '',
+          courseId: id,
+          currentTask: '视频学习中'
+        },
+        videoPosition: { lecture: id, seconds: currentSeconds.value }
+      })
+    })
+    if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`)
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder('utf-8')
+    let buffer = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+      for (const line of lines) {
+        if (!line.startsWith('data:')) continue
+        const raw = line.slice(5).trim()
+        if (!raw || raw === '[DONE]') continue
+        try {
+          const evt = JSON.parse(raw)
+          if (evt.event === 'message' && evt.answer) askAnswer.value += evt.answer
+          if (evt.event === 'error') askAnswer.value += `\n[错误] ${evt.message}`
+        } catch { /* 忽略解析失败的行 */ }
+      }
+    }
+  } catch (err: any) {
+    askAnswer.value = `答疑失败：${err?.message || err}`
+  } finally {
+    asking.value = false
+  }
+}
 </script>
 
 <template>
@@ -712,7 +747,7 @@ const videoUrl = computed(() => {
               </div>
               <div v-if="course.type" class="flex items-center gap-2">
                 <i class="fas fa-bookmark w-5 text-center text-primary"></i>
-                <span class="text-sm">类型：{{ course.type }}</span>
+                <span class="text-sm">类型：{{ getTypeName(course.type) }}</span>
               </div>
               <div v-if="course.schedule" class="flex items-center gap-2">
                 <i class="fas fa-calendar-alt w-5 text-center text-primary"></i>
@@ -778,11 +813,13 @@ const videoUrl = computed(() => {
                   <div class="aspect-video w-full">
                     <video
                       v-if="videoUrl"
+                      ref="videoRef"
                       class="w-full"
                       controls
                       :key="videoUrl"
+                      @timeupdate="onVideoTimeUpdate"
                     >
-                      <source :src="videoUrl" type="video/mp4" />
+                      <source v-for="url in videoUrls" :key="url" :src="url" type="video/mp4" />
                       您的浏览器不支持 HTML5 视频播放。
                     </video>
                     <div v-else class="w-full h-full flex items-center justify-center bg-base-300">
@@ -794,11 +831,11 @@ const videoUrl = computed(() => {
                   </div>
                   <!-- 视频信息 -->
                   <div class="p-4">
-                    <h3 class="font-medium text-lg mb-2">{{ course.name }} - 课程介绍</h3>
+                    <h3 class="font-medium text-lg mb-2">{{ course.name }} · 主讲视频</h3>
                     <div class="flex items-center justify-between text-sm text-base-content/80 mb-3">
                       <div class="flex items-center gap-3">
-                        <span><i class="fas fa-clock mr-1"></i> 10:28</span>
-                        <span><i class="fas fa-eye mr-1"></i> 3,254 次观看</span>
+                        <span><i class="fas fa-clock mr-1"></i> 完整版</span>
+                        <span><i class="fas fa-graduation-cap mr-1"></i> 校本微课</span>
                       </div>
                       <div class="flex items-center gap-2">
                         <button class="btn btn-xs btn-outline btn-circle">
@@ -810,65 +847,111 @@ const videoUrl = computed(() => {
                       </div>
                     </div>
                     <p class="text-sm text-base-content/70">
-                      本视频介绍了课程的主要内容、学习目标和实验环境。通过观看，您将了解到如何高效地完成课程学习，以及获取相关的实践经验。
+                      本视频为《“立心之约”中学生 AI 微课十讲》配套课程录像，建议边看边记录关键概念，并在观看后完成本讲配套的课堂实践任务。
                     </p>
+
+                    <!-- 视频伴侣工具条 -->
+                    <div class="flex flex-wrap gap-2 mt-4 pt-3 border-t border-base-300">
+                      <button class="btn btn-sm btn-outline" @click="showSummary = !showSummary">
+                        <i class="fas fa-list-alt mr-1"></i>{{ showSummary ? '收起导读' : '三分钟导读' }}
+                      </button>
+                      <button class="btn btn-sm btn-primary" @click="openCompanion">
+                        <i class="fas fa-question-circle mr-1"></i>这里没懂？问 AI
+                      </button>
+                      <span class="badge badge-ghost badge-sm ml-auto">
+                        <i class="fas fa-clock mr-1"></i>{{ formatTime(currentSeconds) }}
+                      </span>
+                    </div>
+
+                    <!-- 三分钟导读 -->
+                    <div v-if="showSummary" class="mt-3 p-4 rounded-lg bg-primary/5 border border-primary/20">
+                      <div class="flex items-center gap-2 mb-2">
+                        <i class="fas fa-robot text-primary"></i>
+                        <span class="font-medium text-sm">本讲导读</span>
+                      </div>
+                      <p v-if="summary" class="text-sm text-base-content/80 leading-relaxed">{{ summary }}</p>
+                      <p v-else class="text-sm text-base-content/50">摘要加载中或暂不可用…</p>
+                    </div>
+
+                    <!-- 章节索引 -->
+                    <div v-if="chapters.length" class="mt-4">
+                      <div class="flex items-center gap-2 mb-2">
+                        <i class="fas fa-list text-primary"></i>
+                        <span class="font-medium text-sm">章节索引（点击跳转）</span>
+                      </div>
+                      <div class="flex flex-wrap gap-2">
+                        <button
+                          v-for="ch in chapters"
+                          :key="ch.index"
+                          class="btn btn-xs btn-outline"
+                          @click="seekTo(ch.startSec)"
+                        >
+                          <span class="text-primary mr-1">{{ ch.start }}</span>{{ ch.title }}
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- 讲中答疑面板 -->
+                    <div v-if="companionOpen" class="mt-4 p-4 rounded-lg bg-base-200">
+                      <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                          <i class="fas fa-robot text-primary"></i>
+                          <span class="font-medium text-sm">讲中答疑 · 基于当前画面</span>
+                          <span class="badge badge-primary badge-sm">{{ formatTime(currentSeconds) }}</span>
+                        </div>
+                        <button class="btn btn-ghost btn-xs" @click="companionOpen = false">
+                          <i class="fas fa-times"></i>
+                        </button>
+                      </div>
+                      <div class="flex gap-2 mb-3">
+                        <input
+                          v-model="askQuestion"
+                          class="input input-bordered input-sm flex-1"
+                          placeholder="输入你的问题..."
+                          @keyup.enter="askAboutVideo"
+                        />
+                        <button class="btn btn-primary btn-sm" :disabled="asking || !askQuestion.trim()" @click="askAboutVideo">
+                          {{ asking ? '思考中…' : '提问' }}
+                        </button>
+                      </div>
+                      <div v-if="askAnswer" class="p-3 rounded bg-base-100 text-sm leading-relaxed whitespace-pre-wrap">{{ askAnswer }}</div>
+                      <p v-else class="text-xs text-base-content/50">
+                        AI 会结合你当前播放位置附近讲的内容来回答，越具体的问题效果越好。
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
             
-            <!-- 视频选集 -->
+            <!-- 本讲视频 -->
             <div class="mt-5 mb-3">
               <div class="flex items-center justify-between mb-3">
                 <div class="flex items-center gap-2">
                   <i class="fas fa-list text-primary"></i>
-                  <h3 class="font-medium text-lg">{{ course.name }} 视频选集</h3>
+                  <h3 class="font-medium text-lg">{{ course.name }} · 本讲视频</h3>
                 </div>
-                <span class="badge badge-sm">{{ course.id && course.id <= 12 ? '3个视频' : '暂无视频' }}</span>
+                <span class="badge badge-sm">{{ videoUrl ? '1 个视频' : '暂无视频' }}</span>
               </div>
               
               <!-- 视频列表 -->
-              <div v-if="course.id && course.id <= 12" class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div class="bg-base-200 p-3 rounded-lg cursor-pointer hover:bg-base-300 transition-colors border-l-4 border-primary">
+              <div v-if="videoUrl" class="grid grid-cols-1 gap-3">
+                <div class="bg-base-200 p-3 rounded-lg border-l-4 border-primary">
                   <div class="flex items-center gap-2 mb-2">
                     <div class="w-10 h-10 rounded-lg bg-primary/20 flex items-center justify-center">
                       <i class="fas fa-play-circle text-primary"></i>
                     </div>
                     <div>
                       <h4 class="font-medium">{{ getVideoTitle(course.id, 1) }}</h4>
-                      <span class="text-xs text-base-content/60">{{ course.costTime ? `${Math.floor(course.costTime * 5)}:${Math.floor(Math.random() * 60).toString().padStart(2, '0')}` : '10:28' }}</span>
+                      <span class="text-xs text-base-content/60">完整课程录像 · 高清</span>
                     </div>
                   </div>
                   <p class="text-xs text-base-content/70 line-clamp-2">{{ getVideoDescription(course.id, 1) }}</p>
                 </div>
-                <div class="bg-base-200 p-3 rounded-lg cursor-pointer hover:bg-base-300 transition-colors">
-                  <div class="flex items-center gap-2 mb-2">
-                    <div class="w-10 h-10 rounded-lg bg-base-300 flex items-center justify-center">
-                      <i class="fas fa-play-circle text-base-content/60"></i>
-                    </div>
-                    <div>
-                      <h4 class="font-medium">{{ getVideoTitle(course.id, 2) }}</h4>
-                      <span class="text-xs text-base-content/60">{{ course.costTime ? `${Math.floor(course.costTime * 4)}:${Math.floor(Math.random() * 60).toString().padStart(2, '0')}` : '8:15' }}</span>
-                    </div>
-                  </div>
-                  <p class="text-xs text-base-content/70 line-clamp-2">{{ getVideoDescription(course.id, 2) }}</p>
-                </div>
-                <div class="bg-base-200 p-3 rounded-lg cursor-pointer hover:bg-base-300 transition-colors">
-                  <div class="flex items-center gap-2 mb-2">
-                    <div class="w-10 h-10 rounded-lg bg-base-300 flex items-center justify-center">
-                      <i class="fas fa-play-circle text-base-content/60"></i>
-                    </div>
-                    <div>
-                      <h4 class="font-medium">{{ getVideoTitle(course.id, 3) }}</h4>
-                      <span class="text-xs text-base-content/60">{{ course.costTime ? `${Math.floor(course.costTime * 6)}:${Math.floor(Math.random() * 60).toString().padStart(2, '0')}` : '12:42' }}</span>
-                    </div>
-                  </div>
-                  <p class="text-xs text-base-content/70 line-clamp-2">{{ getVideoDescription(course.id, 3) }}</p>
-                </div>
               </div>
               <div v-else class="bg-base-200 p-6 rounded-lg text-center">
                 <i class="fas fa-film text-4xl text-base-content/30 mb-3"></i>
-                <p class="text-base-content/70">该课程暂无视频选集</p>
+                <p class="text-base-content/70">该课程暂无视频</p>
               </div>
             </div>
           </div>
@@ -891,7 +974,7 @@ const videoUrl = computed(() => {
           <div class="flex flex-wrap gap-2">
             <div class="join">
               <button class="btn btn-sm join-item btn-active">全部</button>
-              <button class="btn btn-sm join-item">实验</button>
+              <button class="btn btn-sm join-item">实践</button>
               <button class="btn btn-sm join-item">理论</button>
             </div>
             <div class="form-control">
@@ -954,16 +1037,16 @@ const videoUrl = computed(() => {
         <div class="divider my-8">
           <div class="flex items-center gap-2">
             <i class="fas fa-fire-alt text-warning"></i>
-            <span class="text-lg">实战实验推荐</span>
+            <span class="text-lg">课堂实践推荐</span>
           </div>
         </div>
         
-        <!-- 推荐实验 -->
+        <!-- 推荐课堂实践 -->
         <div class="bg-gradient-to-r from-primary/5 to-secondary/5 p-4 rounded-lg mb-6 border border-primary/20">
           <div class="flex items-center justify-between mb-3">
             <div class="flex items-center gap-2">
-              <i class="fas fa-flask text-primary"></i>
-              <h3 class="font-medium text-lg">{{ course.name }} 相关实验</h3>
+              <i class="fas fa-lightbulb text-primary"></i>
+              <h3 class="font-medium text-lg">{{ course.name }} 配套实践任务</h3>
               <span class="badge badge-sm badge-primary">可直接跳转</span>
             </div>
             <button class="btn btn-sm btn-outline btn-primary">
@@ -971,7 +1054,7 @@ const videoUrl = computed(() => {
               查看全部
             </button>
           </div>
-          <p class="text-sm text-base-content/70 mb-3">以下是与《{{ course.name }}》相关的实战实验，点击即可直接开始</p>
+          <p class="text-sm text-base-content/70 mb-3">以下是《{{ course.name }}》的配套课堂实践任务，点击即可直接开始</p>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
             <div v-for="experiment in getRecommendedExperiments(course.id)" :key="experiment.id" 
                 class="card bg-base-200/90 hover:bg-base-200 transition-all duration-300 hover:shadow-md border-l-4"
@@ -996,7 +1079,7 @@ const videoUrl = computed(() => {
                     </div>
                   </div>
                   <button @click="startExperiment(experiment.id)" class="btn btn-xs btn-primary">
-                    开始实验
+                    开始任务
                   </button>
                 </div>
               </div>

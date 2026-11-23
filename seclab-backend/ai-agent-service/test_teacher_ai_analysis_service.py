@@ -2,12 +2,9 @@ import json
 import unittest
 from unittest.mock import AsyncMock, patch
 
-import httpx
-
 from teacher_ai_analysis_service import (
-    _call_dify_for_student_analysis,
+    _call_llm_for_student_analysis,
     _extract_json_object,
-    _parse_dify_streaming_answer,
     build_class_ai_input,
     build_class_rule_fallback_analysis,
     build_student_ai_input,
@@ -22,18 +19,6 @@ from teacher_analysis_repository import (
     TeacherAnalysisProviderError,
     TeacherStudentAnalysisRepository,
 )
-
-
-REAL_ASYNC_CLIENT = httpx.AsyncClient
-
-
-class FakeStreamingResponse:
-    def __init__(self, lines):
-        self._lines = lines
-
-    async def aiter_lines(self):
-        for line in self._lines:
-            yield line
 
 
 def _valid_ai_payload():
@@ -67,14 +52,6 @@ def _profile_data():
         "recentAttempts": [{"title": "SQL 注入训练", "score": 40, "isCorrect": False}],
         "personalSignals": [],
     }
-
-
-def _stream_body(answer=None, *, end_event="message_end", prefix_lines=None):
-    lines = list(prefix_lines or [])
-    if answer is not None:
-        lines.append(f"data: {json.dumps({'event': 'message', 'answer': answer}, ensure_ascii=False)}")
-    lines.append(f"data: {json.dumps({'event': end_event}, ensure_ascii=False)}")
-    return ("\n".join(lines) + "\n").encode("utf-8")
 
 
 class TeacherAiAnalysisServiceTest(unittest.TestCase):
@@ -397,7 +374,7 @@ class ManualStudentAnalysisTest(unittest.IsolatedAsyncioTestCase):
                 return_value=_profile_data(),
             ),
             patch(
-                "teacher_ai_analysis_service._call_dify_for_student_analysis",
+                "teacher_ai_analysis_service._call_llm_for_student_analysis",
                 new=AsyncMock(side_effect=RuntimeError("provider unavailable")),
             ),
         ):
@@ -419,7 +396,7 @@ class ManualStudentAnalysisTest(unittest.IsolatedAsyncioTestCase):
                 return_value=_profile_data(),
             ) as profile_loader,
             patch(
-                "teacher_ai_analysis_service._call_dify_for_student_analysis",
+                "teacher_ai_analysis_service._call_llm_for_student_analysis",
                 new=AsyncMock(return_value=_valid_ai_payload()),
             ),
         ):
@@ -435,141 +412,51 @@ class ManualStudentAnalysisTest(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result["analysis"]["fallbackUsed"])
 
 
-class DifyStreamingParserTest(unittest.IsolatedAsyncioTestCase):
-    async def test_streaming_single_answer_returns_complete_text(self):
-        response = FakeStreamingResponse(
-            [
-                'data: {"event":"message","answer":"完整 answer"}',
-                'data: {"event":"message_end"}',
-            ]
-        )
-
-        self.assertEqual(await _parse_dify_streaming_answer(response), "完整 answer")
-
-    async def test_streaming_multiple_answers_are_joined_in_order(self):
-        response = FakeStreamingResponse(
-            [
-                'data: {"event":"message","answer":"第一段"}',
-                'data: {"event":"message","answer":"第二段"}',
-                'data: {"event":"message_end"}',
-            ]
-        )
-
-        self.assertEqual(await _parse_dify_streaming_answer(response), "第一段第二段")
-
-    async def test_streaming_ignores_blank_ping_event_and_invalid_json_lines(self):
-        response = FakeStreamingResponse(
-            [
-                "",
-                "event: ping",
-                "ping",
-                "data: not-json",
-                'data: {"event":"message","answer":"有效内容"}',
-                "data: [DONE]",
-                'data: {"event":"message","answer":"不应读取"}',
-            ]
-        )
-
-        self.assertEqual(await _parse_dify_streaming_answer(response), "有效内容")
-
-    async def test_streaming_stops_on_supported_end_events(self):
-        for event_type in ("message_end", "agent_message_end", "workflow_finished"):
-            with self.subTest(event_type=event_type):
-                response = FakeStreamingResponse(
-                    [
-                        'data: {"event":"message","answer":"结束前"}',
-                        f'data: {{"event":"{event_type}"}}',
-                        'data: {"event":"message","answer":"结束后"}',
-                    ]
-                )
-
-                self.assertEqual(await _parse_dify_streaming_answer(response), "结束前")
-
-    async def test_streaming_without_answer_raises_controlled_error(self):
-        response = FakeStreamingResponse(["event: ping", 'data: {"event":"message_end"}'])
-
-        with self.assertRaisesRegex(RuntimeError, "no answer"):
-            await _parse_dify_streaming_answer(response)
-
-
-class DifyStreamingIntegrationTest(unittest.IsolatedAsyncioTestCase):
-    async def _generate_with_http_response(self, *, status_code=200, body=b""):
-        def handler(_request):
-            return httpx.Response(
-                status_code,
-                headers={"Content-Type": "text/event-stream"},
-                content=body,
-            )
-
-        transport = httpx.MockTransport(handler)
+class LlmClientIntegrationTest(unittest.IsolatedAsyncioTestCase):
+    async def _generate_with_chat_json(self, *, payload=None, side_effect=None):
+        chat_json = AsyncMock(side_effect=side_effect, return_value=payload)
         with (
-            patch("teacher_ai_analysis_service.DIFY_API_URL", "https://dify.example/v1"),
-            patch("teacher_ai_analysis_service.DIFY_API_KEY", "test-only-key"),
-            patch("teacher_ai_analysis_service.get_student_profile_for_teacher", return_value=_profile_data()),
             patch(
-                "teacher_ai_analysis_service.httpx.AsyncClient",
-                side_effect=lambda **kwargs: REAL_ASYNC_CLIENT(transport=transport, **kwargs),
+                "teacher_ai_analysis_service.get_student_profile_for_teacher",
+                return_value=_profile_data(),
             ),
+            patch("llm_client.chat_json", new=chat_json),
         ):
             return await generate_teacher_student_ai_analysis(3)
 
-    async def test_dify_request_uses_streaming_mode_directly(self):
-        requests = []
-        answer = json.dumps(_valid_ai_payload(), ensure_ascii=False)
-
-        def handler(request):
-            requests.append(request)
-            request_payload = json.loads(request.content.decode("utf-8"))
-            if request_payload.get("response_mode") == "blocking":
-                return httpx.Response(
-                    400,
-                    json={"code": "invalid_param", "message": "Agent Chat App does not support blocking mode"},
-                )
-            return httpx.Response(
-                200,
-                headers={"Content-Type": "text/event-stream"},
-                content=_stream_body(answer),
-            )
-
-        transport = httpx.MockTransport(handler)
+    async def test_analysis_uses_llm_client_chat_json(self):
+        chat_json = AsyncMock(return_value=_valid_ai_payload())
         with (
-            patch("teacher_ai_analysis_service.DIFY_API_URL", "https://dify.example/v1"),
-            patch("teacher_ai_analysis_service.DIFY_API_KEY", "test-only-key"),
             patch(
-                "teacher_ai_analysis_service.httpx.AsyncClient",
-                side_effect=lambda **kwargs: REAL_ASYNC_CLIENT(transport=transport, **kwargs),
+                "teacher_ai_analysis_service.get_student_profile_for_teacher",
+                return_value=_profile_data(),
             ),
+            patch("llm_client.chat_json", new=chat_json),
         ):
-            result = await _call_dify_for_student_analysis("教师端学生个人画像分析 prompt", 3)
+            result = await generate_teacher_student_ai_analysis(3)
 
-        self.assertEqual(len(requests), 1)
-        self.assertEqual(str(requests[0].url), "https://dify.example/v1/chat-messages")
-        request_payload = json.loads(requests[0].content.decode("utf-8"))
-        self.assertEqual(
-            request_payload,
-            {
-                "inputs": {},
-                "query": "教师端学生个人画像分析 prompt",
-                "response_mode": "streaming",
-                "conversation_id": "",
-                "user": "teacher-student-profile-3",
-            },
-        )
+        chat_json.assert_awaited_once()
         self.assertEqual(result["overallComment"], _valid_ai_payload()["overallComment"])
+        self.assertEqual(result["generatedBy"], "llm")
+        self.assertFalse(result["fallbackUsed"])
 
-    async def test_http_400_uses_rule_fallback(self):
-        result = await self._generate_with_http_response(status_code=400, body=b'{"error":"bad request"}')
+    async def test_provider_http_error_uses_rule_fallback(self):
+        result = await self._generate_with_chat_json(
+            side_effect=RuntimeError("LLM HTTP 400: bad request")
+        )
 
         self.assertTrue(result["fallbackUsed"])
         self.assertEqual(result["generatedBy"], "rule_fallback")
 
-    async def test_sse_without_answer_uses_rule_fallback(self):
-        result = await self._generate_with_http_response(body=_stream_body())
+    async def test_empty_answer_uses_rule_fallback(self):
+        result = await self._generate_with_chat_json(side_effect=ValueError("空回答"))
 
         self.assertTrue(result["fallbackUsed"])
 
     async def test_non_json_answer_uses_rule_fallback(self):
-        result = await self._generate_with_http_response(body=_stream_body("not-json"))
+        result = await self._generate_with_chat_json(
+            side_effect=ValueError("回答中未找到合法 JSON")
+        )
 
         self.assertTrue(result["fallbackUsed"])
 
@@ -577,9 +464,7 @@ class DifyStreamingIntegrationTest(unittest.IsolatedAsyncioTestCase):
         invalid = _valid_ai_payload()
         del invalid["focusAreas"][0]["teacherAction"]
 
-        result = await self._generate_with_http_response(
-            body=_stream_body(json.dumps(invalid, ensure_ascii=False))
-        )
+        result = await self._generate_with_chat_json(payload=invalid)
 
         self.assertTrue(result["fallbackUsed"])
 
@@ -587,9 +472,7 @@ class DifyStreamingIntegrationTest(unittest.IsolatedAsyncioTestCase):
         invalid = _valid_ai_payload()
         invalid["focusAreas"][0]["teacherAction"] = "你应该开始训练排障题目。"
 
-        result = await self._generate_with_http_response(
-            body=_stream_body(json.dumps(invalid, ensure_ascii=False))
-        )
+        result = await self._generate_with_chat_json(payload=invalid)
 
         self.assertTrue(result["fallbackUsed"])
 
@@ -597,9 +480,7 @@ class DifyStreamingIntegrationTest(unittest.IsolatedAsyncioTestCase):
         invalid = _valid_ai_payload()
         invalid["focusAreas"][0]["teacherAction"] = "建议加强训练，提升相关能力。"
 
-        result = await self._generate_with_http_response(
-            body=_stream_body(json.dumps(invalid, ensure_ascii=False))
-        )
+        result = await self._generate_with_chat_json(payload=invalid)
 
         self.assertTrue(result["fallbackUsed"])
 
@@ -607,9 +488,7 @@ class DifyStreamingIntegrationTest(unittest.IsolatedAsyncioTestCase):
         invalid = _valid_ai_payload()
         invalid["focusAreas"][0]["dimension"] = "class_average"
 
-        result = await self._generate_with_http_response(
-            body=_stream_body(json.dumps(invalid, ensure_ascii=False))
-        )
+        result = await self._generate_with_chat_json(payload=invalid)
 
         self.assertTrue(result["fallbackUsed"])
 

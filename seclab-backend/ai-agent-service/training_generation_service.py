@@ -1,11 +1,9 @@
 import json
-import re
 from typing import Any, Optional
 from uuid import uuid4
 
-import httpx
-
-from config import DIFY_API_KEY, DIFY_API_URL
+import config
+import llm_client
 from training_diagnosis_service import diagnose_training_need
 from training_repository import create_training_session, save_generated_questions
 
@@ -113,54 +111,39 @@ def build_question_generation_prompt(training_context: dict[str, Any]) -> str:
 """.strip()
 
 
-def _extract_json_object(text: str) -> Optional[dict[str, Any]]:
-    if not text:
-        return None
-    try:
-        value = json.loads(text)
-        return value if isinstance(value, dict) else None
-    except json.JSONDecodeError:
-        pass
-    match = re.search(r"\{.*\}", text, flags=re.S)
-    if not match:
-        return None
-    try:
-        value = json.loads(match.group(0))
-        return value if isinstance(value, dict) else None
-    except json.JSONDecodeError:
-        return None
+async def _call_llm_for_questions(prompt: str, user_id: Any) -> tuple[Optional[list[dict[str, Any]]], str, Optional[str]]:
+    """调用本地 Agent（OpenAI 兼容大模型）生成题目。
 
-
-async def _call_dify_for_questions(prompt: str, user_id: Any) -> tuple[Optional[list[dict[str, Any]]], str, Optional[str]]:
-    if not DIFY_API_URL or not DIFY_API_KEY:
-        return None, "dify-unconfigured", "Dify API is not configured"
+    返回契约保持不变 (questions, source_model, error)：
+    - 成功：questions 为题目字典列表，source_model 为实际使用的模型标识，error 为 None
+    - 失败：questions 为 None，error 为具体原因，由上层走结构化兜底
+    user_id 仅保留用于兼容既有调用方，本地 chat_json 不按会话用户区分。
+    """
+    messages = llm_client.build_messages(
+        "你是 SecLab 个性化训练出题助手。严格只输出题目 JSON，不要输出 Markdown 代码块或任何解释文字。",
+        prompt,
+    )
     try:
-        async with httpx.AsyncClient(timeout=80.0) as client:
-            response = await client.post(
-                f"{DIFY_API_URL.rstrip('/')}/chat-messages",
-                headers={
-                    "Authorization": f"Bearer {DIFY_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "query": prompt,
-                    "response_mode": "blocking",
-                    "conversation_id": "",
-                    "user": f"training-{user_id or 'anonymous'}",
-                    "inputs": {"scenario": "personalized_training_question_generation"},
-                },
-            )
-            response.raise_for_status()
-            payload = response.json()
+        payload = await llm_client.chat_json(
+            messages,
+            model=config.LLM_MODEL,
+            max_tokens=config.LLM_MAX_TOKENS,
+            timeout=config.LLM_TIMEOUT,
+        )
     except Exception as exc:
-        return None, "dify-error", str(exc)
+        return None, "llm-error", str(exc)
 
-    answer = payload.get("answer") or payload.get("data", {}).get("answer") or ""
-    parsed = _extract_json_object(answer)
+    parsed = payload if isinstance(payload, dict) else None
+    if parsed is None and isinstance(payload, list):
+        parsed = {"questions": payload}
     questions = parsed.get("questions") if isinstance(parsed, dict) else None
     if isinstance(questions, list) and questions:
-        return [q for q in questions if isinstance(q, dict)], "dify-chat-messages", None
-    return None, "dify-invalid-json", "Dify response did not contain structured questions"
+        return [q for q in questions if isinstance(q, dict)], config.LLM_MODEL, None
+    return None, "llm-invalid-json", "大模型响应未包含结构化的 questions"
+
+
+# 兼容旧引用；新代码请使用 _call_llm_for_questions
+_call_dify_for_questions = _call_llm_for_questions
 
 
 def _fallback_question(
@@ -331,7 +314,7 @@ async def generate_personalized_questions(request: dict[str, Any]) -> dict[str, 
     )
 
     prompt = build_question_generation_prompt(training_context)
-    ai_questions, source_model, error = await _call_dify_for_questions(prompt, training_context.get("user_id"))
+    ai_questions, source_model, error = await _call_llm_for_questions(prompt, training_context.get("user_id"))
     questions = _normalize_questions(ai_questions, training_context, force_fallback=ai_questions is None)
     if ai_questions is None:
         source_model = "local-structured-fallback"

@@ -28,6 +28,13 @@ function mapDifficulty(difficulty: number | null | undefined): 1 | 2 | 3 | 4 | 5
   return Math.min(Math.max(difficulty, 1), 5) as 1 | 2 | 3 | 4 | 5
 }
 
+// 本地放在 public/ai 下的封面直接按根路径访问，其余交给 image() 处理
+function resolveCover(imageUrl: string | null | undefined): string {
+  if (!imageUrl) return '/default-course-image.png'
+  if (imageUrl.includes('/')) return `/${imageUrl.replace(/^\//, '')}`
+  return image(imageUrl)
+}
+
 function mapApiDataToViewData(apiData: CourseSummaryDto[]): CourseOverViewType[] {
   return apiData
     .map((course) => {
@@ -39,12 +46,12 @@ function mapApiDataToViewData(apiData: CourseSummaryDto[]): CourseOverViewType[]
       return {
         id: course.id,
         name: course.name,
-        image: image(course.imageUrl),
+        image: resolveCover(course.imageUrl),
         description: course.description || '',
         status,
-        category: course.type || 'web',
+        category: course.type || 'ai-basic',
         difficulty: mapDifficulty(course.difficulty),
-        estimatedHours: 8,
+        estimatedHours: course.estimatedHours ?? 2,
         tags: course.tags || [],
       }
     })
@@ -67,11 +74,11 @@ const searchQuery = ref('')
 const selectedCategory = ref('')
 
 const categories = [
-  { id: 'web', name: 'Web安全', icon: 'fa-globe' },
-  { id: 'system', name: '系统安全', icon: 'fa-desktop' },
-  { id: 'network', name: '网络安全', icon: 'fa-network-wired' },
-  { id: 'crypto', name: '密码学', icon: 'fa-key' },
-  { id: 'advanced', name: '高级威胁', icon: 'fa-shield-alt' },
+  { id: 'ai-basic', name: 'AI基础', icon: 'fa-robot' },
+  { id: 'ai-perception', name: '感知智能', icon: 'fa-eye' },
+  { id: 'ai-cognition', name: '认知与决策', icon: 'fa-brain' },
+  { id: 'ai-embodied', name: '具身智能', icon: 'fa-cubes' },
+  { id: 'ai-creative', name: '智能创作', icon: 'fa-music' },
 ]
 
 const courses: Ref<CourseOverViewType[]> = ref([])
@@ -116,8 +123,8 @@ onMounted(async () => {
 <template>
   <div class="container-fluid px-4 py-4 overflow-x-hidden min-h-screen">
     <div class="text-center mb-6" :class="{ 'animate-fade-in': isLoaded }">
-      <h1 class="text-3xl font-bold mb-1 bg-clip-text text-transparent bg-gradient-to-r from-primary via-secondary to-accent">探索课程</h1>
-      <p class="text-sm text-base-content/70">发现精心设计的安全课程，开启你的学习之旅</p>
+      <h1 class="text-3xl font-bold mb-1 bg-clip-text text-transparent bg-gradient-to-r from-primary via-secondary to-accent">AI 微课十讲</h1>
+      <p class="text-sm text-base-content/70">立心 LMS · 中学生人工智能微课，十节课带你走进 AI 世界</p>
     </div>
 
     <div class="stats shadow w-full mb-6 bg-base-100 backdrop-blur-sm" :class="{ 'animate-slide-up': isLoaded }">

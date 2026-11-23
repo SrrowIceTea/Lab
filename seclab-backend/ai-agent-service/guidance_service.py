@@ -5,7 +5,7 @@
 2. 调 :func:`error_repository.classify_error_excerpt` 分类错误（若 error_slice 非空）。
 3. 调 :func:`error_repository.save_error_event` 持久化错误事件（镜像 learning_event）。
 4. 调 :func:`ai_repository.ensure_guidance_conversation` 查找/创建会话。
-5. 异步调 Dify chat-messages 流式接口，把 chunk 通过
+5. 异步调本地 agent（:mod:`llm_client`.stream_chat）流式接口，把 chunk 通过
    :func:`guidance_stream_registry.publish` 推送给前端 SSE。
 6. 流式结束后调 :func:`ai_repository.save_ai_message` +
    :func:`ai_repository.update_conversation_after_stream` 持久化。
@@ -16,12 +16,12 @@
 import asyncio
 import json
 import logging
-import os
 from datetime import datetime
 from typing import Any, Optional
 from uuid import uuid4
 
-import httpx
+import config
+import llm_client
 
 import ai_repository
 import error_repository
@@ -29,11 +29,6 @@ import guidance_stream_registry
 from database import get_connection
 
 logger = logging.getLogger(__name__)
-
-DIFY_API_URL = os.getenv("DIFY_API_URL", "https://api.dify.ai/v1")
-DIFY_API_KEY = os.getenv("DIFY_API_KEY", "")
-DIFY_USER = os.getenv("DIFY_GUIDANCE_USER", "guidance-proactive")
-DIFY_TIMEOUT = float(os.getenv("DIFY_GUIDANCE_TIMEOUT", "120"))
 
 
 # guidance_proactive_notes 建表 SQL（与 shujuku/guidance_proactive_notes.sql 一致）
@@ -95,7 +90,12 @@ def _build_context(signal: dict[str, Any]) -> dict[str, Any]:
 
 
 def _build_dify_inputs(signal: dict[str, Any]) -> dict[str, Any]:
-    """构造 Dify chat-messages 的 inputs 字段（变量注入）。
+    """从 GuidanceSignal 构造提示词上下文（供 system / user prompt 与落库复用）。
+
+    函数名保留以兼容既有调用方；语义已从"外部平台的变量注入"改为
+    "本地 agent 的提示词上下文"。返回值仍由 trigger_reason / container /
+    lab_key / error_slice / recent_commands / lab_task_summary /
+    frustration_score / locale 组成，并作为 context_injection 的原始上下文落库。
 
     注意：``recent_commands`` 先取最后 5 条再序列化，避免大量命令导致 JSON
     被截断成非法 JSON（评审缺口：原实现直接 ``json.dumps(...)[:800]`` 会破坏 JSON）。
@@ -121,13 +121,18 @@ def _build_dify_inputs(signal: dict[str, Any]) -> dict[str, Any]:
 
 
 def _build_query(signal: dict[str, Any], error_classified: Optional[dict[str, str]]) -> str:
-    """构造给 Dify 的 query 文本（中文，启发式诊断风格）。"""
+    """构造本地 agent 的 user prompt（中文，启发式诊断风格）。
+
+    在原有字段基础上补充 frustration_score 与 locale，让模型据此调整语气与语言。
+    """
     container = signal.get("container_name", "")
     lab_key = signal.get("lab_key", "")
     reason = signal.get("trigger_reason", "")
     error_slice = (signal.get("error_slice") or "")[:400]
     commands = signal.get("recent_commands") or []
     task = signal.get("lab_task_summary", "")
+    frustration = signal.get("frustration_score", 0)
+    locale = signal.get("locale") or "zh-CN"
 
     parts = [
         f"学生在靶机 {container}（{lab_key}）上陷入无效试错，触发原因：{reason}。",
@@ -144,8 +149,28 @@ def _build_query(signal: dict[str, Any], error_classified: Optional[dict[str, st
     if commands:
         cmd_str = " | ".join(str(c) for c in commands[-3:])
         parts.append(f"最近执行的命令：{cmd_str}")
+    parts.append(f"学生挫败度评分：{frustration}（越高越沮丧，请保持耐心与鼓励）。")
+    parts.append(f"请使用 {locale} 语言回答。")
     parts.append("请用启发式提问的方式（不要直接给答案），引导学生自己发现下一步该检查什么。控制在 3-5 句话。")
     return "\n".join(parts)
+
+
+def _build_system_prompt() -> str:
+    """构造 system prompt：定义主动提示助教的角色与边界。"""
+    return (
+        "你是网络安全靶场实验的助教。当学生陷入无效试错时，"
+        "用启发式提问引导其自主排查，不直接给出答案，也不代为执行任何命令。"
+        "回答简洁、聚焦下一步可检查的方向。"
+    )
+
+
+def _build_guidance_messages(
+    signal: dict[str, Any], error_classified: Optional[dict[str, str]]
+) -> list[dict[str, str]]:
+    """把上下文与错误分类折叠为 llm_client.build_messages 所需的 messages。"""
+    return llm_client.build_messages(
+        _build_system_prompt(), _build_query(signal, error_classified)
+    )
 
 
 def save_guidance_proactive_note(
@@ -195,7 +220,9 @@ def handle_signal(signal: dict[str, Any]) -> dict[str, Any]:
     """
     同步预处理：分类错误 + 持久化错误事件 + 查找/创建会话。
 
-    Returns: ``{"conversation_id": str, "dify_conversation_id": Optional[str], "query": str, "inputs": dict, "user_id": Optional[int]}``
+    Returns: ``{"conversation_id": str, "dify_conversation_id": Optional[str], "query": str, "inputs": dict, "messages": list, "user_id": Optional[int]}``
+
+    其中 ``dify_conversation_id`` 为兼容字段（保留 DB 列名），语义为本地会话 id 或空值。
     """
     lab_session_id = signal.get("lab_session_id") or ""
     error_slice = signal.get("error_slice") or ""
@@ -243,15 +270,18 @@ def handle_signal(signal: dict[str, Any]) -> dict[str, Any]:
         context=context,
     )
 
-    # 4. 构造 Dify 请求参数
+    # 4. 构造本地 agent 的提示词上下文与 messages
     query = _build_query(signal, error_classified)
     inputs = _build_dify_inputs(signal)
+    messages = _build_guidance_messages(signal, error_classified)
 
     return {
         "conversation_id": conv["conversation_id"],
+        # 兼容字段：保留 DB 列名，写入本地会话 id 或空值（不再来自外部平台）
         "dify_conversation_id": conv["dify_conversation_id"],
         "query": query,
         "inputs": inputs,
+        "messages": messages,
         "user_id": user_id,
         "lab_session_id": safe_lab_session_id,
         "error_classified": error_classified,
@@ -267,14 +297,15 @@ async def stream_guidance_to_subscribers(
     dify_conversation_id: Optional[str],
     query: str,
     inputs: dict[str, Any],
+    messages: Optional[list[dict[str, str]]] = None,
     user_id: Optional[int] = None,
     error_classified: Optional[dict[str, str]] = None,
 ) -> None:
     """
-    异步任务：调 Dify 流式，把 chunk 广播给 SSE 订阅者，结束后持久化。
+    异步任务：调本地 agent（llm_client.stream_chat）流式，把 chunk 广播给 SSE 订阅者，结束后持久化。
 
     在 ``asyncio.create_task`` 中调用，不阻塞 signal 端点。
-    无订阅者时跳过 Dify 调用（节省成本）。
+    无订阅者时跳过大模型调用（节省成本）。
     """
     if guidance_stream_registry.subscriber_count(lab_session_id) == 0:
         logger.info(
@@ -296,78 +327,69 @@ async def stream_guidance_to_subscribers(
         },
     )
 
-    headers = {
-        "Authorization": f"Bearer {DIFY_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "query": query,
-        "response_mode": "streaming",
-        "conversation_id": dify_conversation_id or "",
-        "user": DIFY_USER,
-        "inputs": inputs,
-    }
+    # 模型与超时：优先使用 guidance 专用配置，缺失时回退到通用配置
+    model = config.LLM_GUIDANCE_MODEL or config.LLM_MODEL
+    timeout = getattr(config, "LLM_GUIDANCE_TIMEOUT", None) or config.LLM_TIMEOUT
+
+    if not messages:
+        # 兜底：调用方未传 messages（如测试/旧入口）时，按已有 query 重新构造
+        messages = llm_client.build_messages(_build_system_prompt(), query or "")
 
     complete_response = ""
-    new_dify_conversation_id: Optional[str] = dify_conversation_id
+    # 兼容字段：上游会话 id，用于回填 DB 的 dify_conversation_id 列
+    upstream_conversation_id: Optional[str] = dify_conversation_id
+    upstream_message_id: Optional[str] = None
     message_id = f"msg-{uuid4()}"
 
     try:
-        async with httpx.AsyncClient(timeout=DIFY_TIMEOUT) as client:
-            async with client.stream(
-                "POST",
-                f"{DIFY_API_URL}/chat-messages",
-                headers=headers,
-                json=payload,
-            ) as response:
-                if response.status_code != 200:
-                    body = await response.aread()
-                    error_msg = body.decode("utf-8", errors="replace")
-                    logger.error(
-                        "Dify guidance call failed status=%s body=%s",
-                        response.status_code,
-                        error_msg[:300],
-                    )
+        async for event in llm_client.stream_chat(
+            messages,
+            user=str(user_id) if user_id is not None else "guidance-proactive",
+            conversation_id=conversation_id,
+            model=model,
+            timeout=timeout,
+        ):
+            event_type = event.get("event")
+
+            if event_type == llm_client.EVENT_MESSAGE:
+                # 只转发 message 事件的 answer 增量文本
+                answer = event.get("answer") or ""
+                if answer:
+                    complete_response += answer
                     await guidance_stream_registry.publish(
                         lab_session_id,
                         {
-                            "type": "error",
+                            "type": "chunk",
                             "signal_id": signal_id,
-                            "message": f"Dify 调用失败（{response.status_code}）",
+                            "content": answer,
                             "ts": datetime.utcnow().isoformat(),
                         },
                     )
-                    return
 
-                async for line in response.aiter_lines():
-                    if not line or not line.startswith("data:"):
-                        continue
-                    raw = line[5:].strip()
-                    if not raw or raw == "[DONE]":
-                        continue
-                    try:
-                        chunk = json.loads(raw)
-                    except json.JSONDecodeError:
-                        continue
+            elif event_type == llm_client.EVENT_MESSAGE_END:
+                # 捕获上游会话/消息 id（由 llm_client 透传或生成）
+                if event.get("conversation_id"):
+                    upstream_conversation_id = event["conversation_id"]
+                if event.get("message_id"):
+                    upstream_message_id = event["message_id"]
 
-                    # 捕获 Dify conversation_id（首次调用后回填）
-                    if chunk.get("conversation_id"):
-                        new_dify_conversation_id = chunk["conversation_id"]
-
-                    # 只转发 answer 字段的增量文本
-                    if chunk.get("event") == "message" and chunk.get("answer"):
-                        complete_response += chunk["answer"]
-                        await guidance_stream_registry.publish(
-                            lab_session_id,
-                            {
-                                "type": "chunk",
-                                "signal_id": signal_id,
-                                "content": chunk["answer"],
-                                "ts": datetime.utcnow().isoformat(),
-                            },
-                        )
+            elif event_type == llm_client.EVENT_ERROR:
+                error_msg = event.get("message") or "本地大模型调用失败"
+                logger.error(
+                    "guidance LLM stream error signal_id=%s: %s", signal_id, error_msg
+                )
+                await guidance_stream_registry.publish(
+                    lab_session_id,
+                    {
+                        "type": "error",
+                        "signal_id": signal_id,
+                        "message": error_msg,
+                        "ts": datetime.utcnow().isoformat(),
+                    },
+                )
+                return
     except Exception as e:
-        logger.exception("guidance Dify stream failed signal_id=%s: %s", signal_id, e)
+        logger.exception("guidance LLM stream failed signal_id=%s: %s", signal_id, e)
         await guidance_stream_registry.publish(
             lab_session_id,
             {
@@ -392,6 +414,8 @@ async def stream_guidance_to_subscribers(
                 "signal_id": signal_id,
                 "trigger_reason": trigger_reason,
                 "inputs": inputs,
+                "upstream_conversation_id": upstream_conversation_id,
+                "upstream_message_id": upstream_message_id,
             },
             message_id=message_id,
         )
@@ -401,11 +425,11 @@ async def stream_guidance_to_subscribers(
             context_type="guidance_signal",
             raw_context=inputs,
         )
-        # 回填 dify_conversation_id（首次调用后才有值）
-        if new_dify_conversation_id and new_dify_conversation_id != dify_conversation_id:
+        # 回填会话 id（兼容字段 dify_conversation_id：此处写入本地会话 id）
+        if upstream_conversation_id and upstream_conversation_id != dify_conversation_id:
             ai_repository.update_conversation_after_stream(
                 conversation_id=conversation_id,
-                dify_conversation_id=new_dify_conversation_id,
+                dify_conversation_id=upstream_conversation_id,
                 status="active",
             )
         # 落 guidance_proactive_notes 表
@@ -428,7 +452,9 @@ async def stream_guidance_to_subscribers(
             "signal_id": signal_id,
             "message_id": message_id,
             "conversation_id": conversation_id,
-            "dify_conversation_id": new_dify_conversation_id,
+            # 兼容字段：保留旧字段名，另给出语义更清晰的新字段
+            "dify_conversation_id": upstream_conversation_id,
+            "upstream_conversation_id": upstream_conversation_id,
             "ts": datetime.utcnow().isoformat(),
         },
     )
@@ -465,6 +491,7 @@ def dispatch_signal_task(signal: dict[str, Any]) -> dict[str, Any]:
             dify_conversation_id=prepared["dify_conversation_id"],
             query=prepared["query"],
             inputs=prepared["inputs"],
+            messages=prepared.get("messages"),
             user_id=prepared.get("user_id"),
             error_classified=prepared.get("error_classified"),
         )

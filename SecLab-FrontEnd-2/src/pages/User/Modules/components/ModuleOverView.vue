@@ -68,7 +68,7 @@ const emit = defineEmits<{
             :key="prereq" 
             class="text-xs px-2 py-1 bg-base-200 rounded-full"
           >
-            实验 {{ prereq }}
+            实践 {{ prereq }}
           </span>
         </div>
       </div>
@@ -80,7 +80,7 @@ const emit = defineEmits<{
           :disabled="module.status === 'locked'"
           @click="$emit('startExperiment', module.id)"
         >
-          {{ module.status === 'locked' ? '未解锁' : '开始实验' }}
+          {{ module.status === 'locked' ? '未解锁' : '开始实践' }}
         </button>
       </div>
     </div>

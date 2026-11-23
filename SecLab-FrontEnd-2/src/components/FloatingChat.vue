@@ -8,10 +8,10 @@
       <div class="flex items-center justify-between w-full px-2">
         <div class="flex items-center gap-2">
           <div class="w-6 h-6 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-sm">
-            <i class="fas fa-shield-alt text-xs text-white"></i>
+            <i class="fas fa-robot text-xs text-white"></i>
           </div>
           <div v-if="!isMinimized">
-            <h3 class="text-sm font-bold">Sec<span class="text-primary">Lab</span> <span class="text-secondary">Agent</span></h3>
+            <h3 class="text-sm font-bold"><span class="text-primary">AI</span> <span class="text-secondary">学习助手</span></h3>
           </div>
         </div>
         <div class="flex gap-1">
@@ -36,13 +36,13 @@
           <div class="flex flex-col items-center justify-center h-full text-center text-base-content/50 py-4">
             <div class="w-12 h-12 rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 
                       flex items-center justify-center mb-2 animate-pulse">
-              <i class="fas fa-shield-alt text-xl text-primary"></i>
+              <i class="fas fa-robot text-xl text-primary"></i>
             </div>
             <h3 class="text-sm font-bold mb-1">
-              SecLab AI 助手
+              AI 学习助手
             </h3>
             <div class="max-w-xs text-xs text-base-content/70 px-2">
-              您的网络安全学习伙伴
+              你的 AI 微课学习伙伴，可读取当前课堂终端日志
             </div>
           </div>
         </div>
@@ -81,7 +81,7 @@
             >
               <div class="chat-image avatar">
                 <div class="w-6 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-md">
-                  <i class="fas fa-shield-alt text-xs text-white"></i>
+                  <i class="fas fa-robot text-xs text-white"></i>
                 </div>
               </div>
               <div class="chat-bubble assistant-bubble p-0 text-xs">
@@ -204,19 +204,19 @@
           <div class="flex items-center gap-1 mb-1">
             <div class="flex items-center gap-1 text-xs text-base-content/50 flex-1">
               <i class="fas fa-robot text-secondary text-xs"></i>
-              <span>SecLabAssistant · Dify Agent</span>
-              <!-- 靶机运行中标识 -->
-              <span v-if="labContainer" class="badge badge-success badge-xs ml-1">
-                <i class="fas fa-circle text-[8px] mr-0.5"></i>运行中
+              <span>AI 课程助手 · 本地 Agent</span>
+              <!-- 课堂终端已连接标识 -->
+              <span v-if="hasTerminalLogs" class="badge badge-success badge-xs ml-1">
+                <i class="fas fa-circle text-[8px] mr-0.5"></i>终端已连接
               </span>
             </div>
             <!-- 一键提示按钮 -->
             <button
-              v-if="labContainer"
+              v-if="hasTerminalLogs"
               class="btn btn-xs btn-warning gap-1"
               @click="sendHint"
               :disabled="isLoading"
-              title="让 Agent 读取 Docker 日志并给出提示"
+              title="让 AI 助手读取课堂终端日志并给出提示"
             >
               <i class="fas fa-lightbulb text-xs"></i>
               一键提示
@@ -253,11 +253,19 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, nextTick, watch, computed } from 'vue'
 import MarkdownRenderer from './MarkdownRenderer.vue'
-import { currentLabContext, guidanceAlerts, markGuidanceAlertsRead, type GuidanceAlert } from '../composables/useLabState'
+import {
+  currentLabContext,
+  guidanceAlerts,
+  markGuidanceAlertsRead,
+  ttyLogLines,
+  videoPosition,
+  type GuidanceAlert
+} from '../composables/useLabState'
 import { reportLearningEvent } from '../api'
+import { findAiModuleById } from '../data/aiModules'
 
-// Dify SSE 事件类型
-interface DifyChunk {
+// 本地 Agent SSE 事件类型（与后端 llm_client 输出一致）
+interface AgentChunk {
   event: string
   conversation_id?: string
   answer?: string
@@ -327,6 +335,54 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'toggle-visibility', 'hint-sent'])
 
+/** 当前课堂终端累计的日志行数（有日志才显示「一键提示」） */
+const hasTerminalLogs = computed(() => ttyLogLines.value.length > 0)
+
+/** 把模拟终端最近的输出拼成文本，随对话发给后端，让 AI 有能力“读日志” */
+const terminalLogText = computed(() =>
+  ttyLogLines.value.slice(-80).map((line) => line.line).join('\n')
+)
+
+/**
+ * 课程上下文：对话前让 AI 知道当前在学哪一讲、有什么题目。
+ * 从 useLabState 的 moduleId 关联到本地 aiModules 数据（与页面展示同源）。
+ */
+const lessonContext = computed(() => {
+  const ctx = currentLabContext.value
+  const rawId = ctx.moduleId ?? ctx.experimentId ?? ctx.courseId
+  const moduleId = Number(rawId)
+  const lesson = Number.isFinite(moduleId) && moduleId > 0
+    ? findAiModuleById(moduleId)
+    : undefined
+
+  const questions = lesson?.taskPoints.flatMap((task) =>
+    task.questions.map((q) => ({
+      id: q.id,
+      type: q.type,
+      content: q.content,
+      score: q.score,
+      options: q.options,
+      analysis: q.analysis,
+      reference: q.reference
+    }))
+  ) ?? []
+
+  return {
+    moduleId: ctx.moduleId ?? lesson?.id ?? null,
+    moduleName: ctx.moduleName ?? lesson?.name ?? '',
+    experimentId: ctx.experimentId ?? null,
+    experimentTitle: ctx.experimentTitle ?? lesson?.name ?? '',
+    courseId: ctx.courseId ?? lesson?.id ?? null,
+    category: lesson?.category ?? '',
+    currentTask: ctx.currentTask ?? lesson?.taskPoints[0]?.name ?? '',
+    labSessionId: ctx.labSessionId ?? '',
+    userId: ctx.userId ?? null,
+    classId: ctx.classId ?? null,
+    objectives: lesson?.objectives ?? [],
+    questions
+  }
+})
+
 const labContextText = computed(() => {
   const context = currentLabContext.value
   const entries = [
@@ -336,8 +392,7 @@ const labContextText = computed(() => {
     ['实验标题', context.experimentTitle],
     ['当前任务', context.currentTask],
     ['会话ID', context.labSessionId],
-    ['容器名', context.containerName || context.currentLabContainer],
-    ['靶机URL', context.targetMachineUrl || context.targetUrl],
+    ['终端日志行数', ttyLogLines.value.length],
     ['用户ID', context.userId],
     ['班级ID', context.classId],
     ['课程ID', context.courseId]
@@ -371,8 +426,8 @@ async function persistAiInteractionEvent(userQuestion: string, assistantReply: s
     task_id: null,
     question_id: null,
     lab_session_id: context.labSessionId || null,
-    container_name: String(context.containerName || context.currentLabContainer || props.labContainer || '').trim() || null,
-    target_url: String(context.targetMachineUrl || context.targetUrl || '').trim() || null,
+    container_name: null,
+    target_url: null,
     prompt: userQuestion,
     assistant_reply: assistantReply,
     message_role: 'user',
@@ -385,8 +440,7 @@ async function persistAiInteractionEvent(userQuestion: string, assistantReply: s
           experimentTitle: context.experimentTitle ?? null,
           currentTask: context.currentTask ?? null,
           labSessionId: context.labSessionId ?? null,
-          containerName: context.containerName || context.currentLabContainer || props.labContainer || null,
-          targetUrl: context.targetMachineUrl || context.targetUrl || null,
+          terminalLogLines: ttyLogLines.value.length,
           userId: context.userId ?? null,
           classId: context.classId ?? null,
           courseId: context.courseId ?? null,
@@ -403,11 +457,10 @@ async function persistAiInteractionEvent(userQuestion: string, assistantReply: s
 }
 
 // ── 一键提示 ─────────────────────────────────────────────────────
-// 面向学习者的简洁文案：不暴露"容器""日志""上下文"等技术字眼，
-// 让聊天界面更直观。容器日志由后端根据 container_name 自动读取
-// 并 base64 编码附加到 query，前端无需在此拼接。
+// 模拟终端的每一行输出都会写入 ttyLogLines；发消息时随请求体一并提交，
+// 由后端拼进 query，AI 助手就能基于学生真实的操作轨迹给出提示。
 const sendHint = () => {
-  inputMessage.value = '请根据我最近的几次操作，给出我接下来需要怎么做的提示'
+  inputMessage.value = '请根据我最近的几次终端操作，给出我接下来需要怎么做的提示'
   handleSendMessage()
   emit('hint-sent')
 }
@@ -446,21 +499,20 @@ const AGENT_BASE_URL = import.meta.env.VITE_AGENT_BASE_URL || 'http://localhost:
 // 会话 ID（保持多轮对话上下文）
 const conversationId = ref<string>('')
 
-// 工具名称 → 可读标签映射
+// 工具名称 → 可读标签映射（若模型返回工具调用，这里做友好展示）
 const TOOL_LABELS: Record<string, string> = {
-  'get_container_status': '📊 获取容器状态',
-  'get_container_logs':   '📋 读取容器日志',
-  'exec_in_container':    '⚡ 执行容器指令',
-  'stop_container':       '🛑 停止容器',
+  'get_container_logs':   '📋 读取终端日志',
+  'get_terminal_logs':    '📋 读取终端日志',
+  'read_lesson_context':  '📚 读取课程上下文',
+  'search_knowledge':     '🔍 检索课程知识库',
 }
 
 // 格式化工具入参（JSON → 人类可读摘要）
 const formatToolInput = (raw: string): string => {
   try {
     const obj = JSON.parse(raw)
-    // 优先显示 container_name，再显示其他键
     const parts: string[] = []
-    if (obj.container_name) parts.push(`容器: ${obj.container_name}`)
+    if (obj.log_source)     parts.push(`来源: ${obj.log_source}`)
     if (obj.tail)           parts.push(`最近 ${obj.tail} 行`)
     if (obj.command)        parts.push(`命令: ${obj.command}`)
     if (obj.name)           parts.push(`名称: ${obj.name}`)
@@ -497,8 +549,8 @@ const scrollToBottom = () => {
   }
 }
 
-// ── 调用 Dify Agent（SSE 流式）──────────────────────────────
-const callDifyAgent = async (userQuestion: string, messageIndex: number) => {
+// ── 调用本地 Agent（SSE 流式）──────────────────────────────
+const callAgent = async (userQuestion: string, messageIndex: number) => {
   messages.value[messageIndex].isStreaming = true
   messages.value[messageIndex].streamContent = ''
   messages.value[messageIndex].showThinking = false
@@ -506,18 +558,14 @@ const callDifyAgent = async (userQuestion: string, messageIndex: number) => {
 
   let completeResponse = ''
   let completeThinking = ''
-  // Dify Agent 的 answer 里可能包含 <think>...</think> 思考过程标签，
+  // 部分模型的 answer 里可能包含 <think>...</think> 思考过程标签，
   // 需要流式过滤，只把实际回答拼入 completeResponse。
   let inThinkBlock = false
 
   try {
-    // 出站模式：把当前靶机容器名传给后端，后端读日志拼进 query，
-    // 避免 Dify 云端回调本地工具（需要公网穿透）
-    const containerName = currentLabContext.value.containerName
-      || currentLabContext.value.currentLabContainer
-      || props.labContainer
-      || ''
-
+    // 本地 Agent 模式：终端日志 + 课程上下文一起提交。
+    // 后端把 lab_context（当前课程/任务/题目）写进 system prompt，
+    // AI 在回答前就知道学生正在学哪一讲、有哪些题目。
     const response = await fetch(`${AGENT_BASE_URL}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -526,8 +574,11 @@ const callDifyAgent = async (userQuestion: string, messageIndex: number) => {
         conversation_id: conversationId.value,
         user: 'student',
         inputs: {},
-        container_name: containerName || null,
-        log_tail: 50
+        terminal_log: terminalLogText.value || null,
+        log_source: 'simulated-terminal',
+        log_tail: 80,
+        lab_context: lessonContext.value,
+        videoPosition: videoPosition.value
       })
     })
 
@@ -554,7 +605,7 @@ const callDifyAgent = async (userQuestion: string, messageIndex: number) => {
         if (!raw || raw === '[DONE]') continue
 
         try {
-          const chunk = JSON.parse(raw) as DifyChunk
+          const chunk = JSON.parse(raw) as AgentChunk
 
           // 保存 conversation_id 用于多轮对话
           if (chunk.conversation_id) {
@@ -706,8 +757,8 @@ const handleSendMessage = () => {
   // 确保滚动到底部
   scrollToBottom()
   
-  // 调用 Dify Agent
-  callDifyAgent(userQuestion, responseIndex)
+  // 调用本地 Agent
+  callAgent(userQuestion, responseIndex)
     .finally(() => {
       isLoading.value = false
       // 回答完成后再次滚动到底部

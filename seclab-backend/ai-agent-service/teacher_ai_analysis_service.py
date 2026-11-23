@@ -4,13 +4,12 @@ import json
 import logging
 import math
 import re
-import time
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 import httpx
 
-from config import DIFY_API_KEY, DIFY_API_URL
+import llm_client
 from teacher_ai_prompts import (
     build_class_ai_analysis_prompt,
     build_student_ai_analysis_prompt,
@@ -54,11 +53,10 @@ VAGUE_ADVICE_PATTERNS = (
     "建议补强",
     "提升相关能力",
 )
-STREAM_END_EVENTS = {"message_end", "agent_message_end", "workflow_finished"}
 
 
 def provider_failure_message(exc: Exception) -> str:
-    """Return a safe, teacher-facing reason without leaking provider details."""
+    """返回安全、面向教师的大模型服务失败原因，不暴露供应商内部细节。"""
     chain: list[BaseException] = []
     current: Optional[BaseException] = exc
     while current is not None and current not in chain:
@@ -69,20 +67,35 @@ def provider_failure_message(exc: Exception) -> str:
         if isinstance(item, httpx.HTTPStatusError):
             status_code = item.response.status_code
             if status_code in {401, 403}:
-                return "Dify 鉴权失败，请检查应用 API Key 是否仍然有效。"
+                return "大模型鉴权失败，请检查 API Key 是否仍然有效。"
             if status_code == 429:
-                return "Dify 模型额度或调用频率已受限，请检查模型供应商余额和限流设置。"
+                return "大模型额度或调用频率已受限，请检查模型供应商余额和限流设置。"
             if status_code >= 500:
-                return "Dify 已连接，但上游模型服务暂时异常，请稍后重试。"
+                return "大模型服务已连接，但上游模型暂时异常，请稍后重试。"
 
     combined = " ".join(str(item).lower() for item in chain)
-    if any(isinstance(item, (TimeoutError, httpx.TimeoutException)) for item in chain):
-        return "Dify 应用已连接，但模型生成超时；请检查 Dify Agent 的模型供应商、额度和工具配置。"
-    if any(keyword in combined for keyword in ("quota", "rate limit", "rate_limit", "insufficient balance")):
-        return "Dify 模型额度或调用频率已受限，请检查模型供应商余额和限流设置。"
-    if any(keyword in combined for keyword in ("not valid structured", "不是有效结构化", "不能为空", "必须为")):
-        return "Dify 已返回内容，但结果格式不符合教学分析要求，请检查 Agent 提示词和输出格式。"
-    return "Dify 已连接，但本次模型生成失败；请检查 Dify Agent 的模型供应商和运行日志。"
+    # llm_client 把 HTTP/超时等异常统一包装为 RuntimeError，这里按文案识别。
+    if "尚未配置大模型" in combined or "not configured" in combined:
+        return "大模型服务尚未配置，请检查 LLM_API_BASE / LLM_API_KEY / LLM_MODEL 设置。"
+    if any(isinstance(item, (TimeoutError, httpx.TimeoutException)) for item in chain) or any(
+        keyword in combined for keyword in ("timeout", "超时")
+    ):
+        return "大模型服务生成超时；请检查模型供应商、额度和配置后重试。"
+    if any(keyword in combined for keyword in ("http 401", "http 403", "鉴权", "api key")):
+        return "大模型鉴权失败，请检查 API Key 是否仍然有效。"
+    if any(
+        keyword in combined
+        for keyword in ("http 429", "quota", "rate limit", "rate_limit", "insufficient balance", "额度")
+    ):
+        return "大模型额度或调用频率已受限，请检查模型供应商余额和限流设置。"
+    if any(keyword in combined for keyword in ("http 5", "unavailable", "上游", "暂时异常")):
+        return "大模型服务已连接，但上游模型暂时异常，请稍后重试。"
+    if any(
+        keyword in combined
+        for keyword in ("not valid structured", "不是有效结构化", "不能为空", "必须为", "未找到合法 json", "空回答")
+    ):
+        return "大模型已返回内容，但结果格式不符合教学分析要求，请检查提示词和输出格式。"
+    return "大模型服务本次生成失败；请检查模型供应商配置和运行日志。"
 
 
 def _now_iso() -> str:
@@ -313,38 +326,6 @@ def _extract_json_object(text: str) -> Optional[dict[str, Any]]:
     return value
 
 
-async def _parse_dify_streaming_answer(response: httpx.Response, *, max_seconds: float = 45.0) -> str:
-    chunks: list[str] = []
-    deadline = time.monotonic() + max_seconds
-    async for raw_line in response.aiter_lines():
-        if time.monotonic() > deadline:
-            raise TimeoutError("Dify streaming response timed out")
-        line = raw_line.strip()
-        if not line.startswith("data:"):
-            continue
-        data_text = line.removeprefix("data:").strip()
-        if not data_text:
-            continue
-        if data_text == "[DONE]":
-            break
-        try:
-            event_payload = json.loads(data_text)
-        except json.JSONDecodeError:
-            continue
-        event = event_payload.get("event")
-        if event == "error":
-            raise ValueError(str(event_payload.get("message") or "Dify streaming error"))
-        answer_chunk = event_payload.get("answer")
-        if answer_chunk:
-            chunks.append(str(answer_chunk))
-        if event in STREAM_END_EVENTS:
-            break
-    answer = "".join(chunks).strip()
-    if not answer:
-        raise RuntimeError("Dify streaming response has no answer")
-    return answer
-
-
 def _has_student_tone(value: str) -> bool:
     return any(pattern in value for pattern in STUDENT_TONE_PATTERNS)
 
@@ -498,35 +479,27 @@ def validate_teaching_class_analysis_payload(
     }
 
 
-async def _call_dify_for_student_analysis(prompt: str, user_id: Any) -> dict[str, Any]:
-    if not DIFY_API_URL or not DIFY_API_KEY:
-        raise RuntimeError("Dify API is not configured")
-    timeout = httpx.Timeout(30.0, connect=10.0, read=15.0, write=10.0, pool=10.0)
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        request_url = f"{DIFY_API_URL.rstrip('/')}/chat-messages"
-        headers = {
-            "Authorization": f"Bearer {DIFY_API_KEY}",
-            "Content-Type": "application/json",
-        }
-        request_body = {
-            "inputs": {},
-            "query": prompt,
-            "response_mode": "streaming",
-            "conversation_id": "",
-            "user": f"teacher-student-profile-{user_id or 'anonymous'}",
-        }
-        async with client.stream(
-            "POST",
-            request_url,
-            headers=headers,
-            json=request_body,
-        ) as streaming_response:
-            streaming_response.raise_for_status()
-            text = await _parse_dify_streaming_answer(streaming_response)
-    parsed = _extract_json_object(text)
-    if not parsed:
+async def _call_llm_for_student_analysis(prompt: str, user_id: Any) -> dict[str, Any]:
+    """调用本地大模型 Agent 生成教师端分析结果（严格 JSON）。
+
+    通过 llm_client 请求 OpenAI 兼容的 /chat/completions，JSON 提取交由
+    llm_client.chat_json 处理。解析失败会抛出异常，由上层调用方沿用现有的
+    规则兜底逻辑处理，不会直接向前端返回 500。
+    user_id 仅为兼容旧签名保留，不参与请求。
+    """
+    logger.debug("teacher analysis llm call user=%s", user_id)
+    messages = llm_client.build_messages(
+        "你是教学分析助手，必须只输出严格 JSON，不要输出 Markdown 或解释性前后缀。",
+        prompt,
+    )
+    payload = await llm_client.chat_json(messages)
+    if not isinstance(payload, dict):
         raise ValueError("AI 返回内容不是有效结构化结果")
-    return parsed
+    return payload
+
+
+# 兼容旧调用方（其它教师分析服务仍从本模块导入该名称）
+_call_dify_for_student_analysis = _call_llm_for_student_analysis
 
 
 async def generate_teacher_student_ai_analysis(
@@ -538,7 +511,7 @@ async def generate_teacher_student_ai_analysis(
     try:
         ai_input = build_student_ai_input(profile_data)
         prompt = build_student_ai_analysis_prompt(json.dumps(ai_input, ensure_ascii=False))
-        payload = await _call_dify_for_student_analysis(prompt, user_id)
+        payload = await _call_llm_for_student_analysis(prompt, user_id)
         result = validate_ai_analysis_payload(payload)
         result["generatedAt"] = generated_at
         return result
@@ -555,7 +528,7 @@ async def generate_teacher_class_ai_analysis(
     try:
         ai_input = build_class_ai_input(class_data)
         prompt = build_class_ai_analysis_prompt(json.dumps(ai_input, ensure_ascii=False))
-        payload = await _call_dify_for_student_analysis(prompt, f"class-{class_id}")
+        payload = await _call_llm_for_student_analysis(prompt, f"class-{class_id}")
         result = validate_class_ai_analysis_payload(payload)
         result["generatedAt"] = generated_at
         return result
@@ -589,7 +562,7 @@ async def run_manual_teaching_class_analysis(
     try:
         evidence = collect_teaching_class_analysis_evidence(teaching_class_id)
         prompt = build_teaching_class_analysis_prompt(json.dumps(evidence, ensure_ascii=False))
-        payload = await _call_dify_for_student_analysis(prompt, f"teaching-class-{teaching_class_id}")
+        payload = await _call_llm_for_student_analysis(prompt, f"teaching-class-{teaching_class_id}")
         result = validate_teaching_class_analysis_payload(
             payload,
             set(evidence.get("evidenceQuestionIds") or []),
@@ -656,7 +629,7 @@ async def run_manual_student_analysis(
             raise InsufficientAnalysisDataError("该学生暂无可用于分析的学习记录")
         evidence = build_student_ai_input(profile_data)
         prompt = build_student_ai_analysis_prompt(json.dumps(evidence, ensure_ascii=False))
-        payload = await _call_dify_for_student_analysis(
+        payload = await _call_llm_for_student_analysis(
             prompt,
             f"teaching-class-{teaching_class_id}-student-{student_id}",
         )

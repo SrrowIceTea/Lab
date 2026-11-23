@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450" viewBox="0 0 800 450" role="img" aria-label="第6讲">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#08304e"/>
+      <stop offset="1" stop-color="#0369a1"/>
+    </linearGradient>
+    <linearGradient id="bar" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#93c5fd" stop-opacity=".35"/>
+      <stop offset="1" stop-color="#93c5fd" stop-opacity=".95"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#93c5fd" stop-opacity=".42"/>
+      <stop offset="1" stop-color="#93c5fd" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0 L0 0 0 40" fill="none" stroke="#ffffff" stroke-opacity=".07" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <rect width="800" height="450" fill="url(#bg)"/>
+  <rect width="800" height="450" fill="url(#grid)"/>
+  <circle cx="620" cy="210" r="260" fill="url(#glow)"/>
+  <text x="742" y="410" text-anchor="end" font-family="'Microsoft YaHei',sans-serif" font-size="200" font-weight="700" fill="#ffffff" opacity=".06">06</text>
+
+  <g><line x1="580" y1="104" x2="580" y2="132" stroke="#fff" stroke-width="3" opacity=".7"/>
+  <circle cx="580" cy="100" r="8" fill="#fff" opacity=".9"/>
+  <rect x="486" y="132" width="188" height="150" rx="36" fill="none" stroke="#fff" stroke-width="4" opacity=".92"/>
+  <circle cx="536" cy="196" r="15" fill="#fff"/>
+  <circle cx="624" cy="196" r="15" fill="#fff"/>
+  <path d="M540 242 Q580 266 620 242" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" opacity=".85"/>
+  <rect x="520" y="300" width="120" height="34" rx="12" fill="none" stroke="#fff" stroke-width="3" opacity=".55"/>
+  <rect x="446" y="176" width="24" height="62" rx="10" fill="none" stroke="#fff" stroke-width="3" opacity=".45"/>
+  <rect x="690" y="176" width="24" height="62" rx="10" fill="none" stroke="#fff" stroke-width="3" opacity=".45"/>
+  </g>
+
+  <rect x="58" y="58" width="126" height="34" rx="17" fill="#ffffff" fill-opacity=".16" stroke="#ffffff" stroke-opacity=".34"/>
+  <text x="121" y="81" text-anchor="middle" font-family="'Microsoft YaHei',sans-serif" font-size="17" font-weight="600" fill="#ffffff">第 6 讲</text>
+
+  <text x="58" y="184" font-family="'Microsoft YaHei','PingFang SC',sans-serif" font-size="46" font-weight="700" fill="#ffffff">未来生活</text><text x="58" y="244" font-family="'Microsoft YaHei','PingFang SC',sans-serif" font-size="46" font-weight="700" fill="#ffffff">离不开的伙伴</text>
+  <rect x="58" y="270" width="52" height="4" rx="2" fill="#93c5fd"/>
+  <text x="58" y="310" font-family="'Segoe UI',Arial,sans-serif" font-size="14" letter-spacing="2.6" font-weight="600" fill="#ffffff" fill-opacity=".72">INTELLIGENT ROBOTICS</text>
+
+  <rect x="0" y="440" width="800" height="10" fill="#93c5fd" opacity=".85"/>
+</svg>

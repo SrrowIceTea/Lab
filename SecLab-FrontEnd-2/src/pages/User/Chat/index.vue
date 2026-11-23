@@ -10,14 +10,14 @@
           <div class="flex items-center justify-between p-4 border-b border-base-200 bg-base-100/90 backdrop-blur-sm sticky top-0 z-10">
             <div class="flex items-center gap-2">
               <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg">
-                <i class="fas fa-shield-alt text-xl text-white"></i>
+                <i class="fas fa-robot text-xl text-white"></i>
               </div>
               <div>
                 <div class="flex items-center gap-1">
-                  <h2 class="text-xl font-bold">Sec<span class="text-primary">Lab</span> AI</h2>
+                  <h2 class="text-xl font-bold">立心 <span class="text-primary">LMS</span></h2>
                   <div class="badge badge-primary badge-sm">Beta</div>
                 </div>
-                <p class="text-xs text-base-content/60">安全知识智能助手</p>
+                <p class="text-xs text-base-content/60">AI 微课学习助手</p>
               </div>
             </div>
             <div class="flex gap-2">
@@ -51,14 +51,14 @@
             <div v-if="messages.length === 0" class="flex flex-col items-center justify-start h-full text-center text-base-content/50">
               <div class="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-primary/20 to-secondary/20 
                           flex items-center justify-center mb-4 animate-pulse">
-                <i class="fas fa-shield-alt text-3xl sm:text-4xl text-primary"></i>
+                <i class="fas fa-robot text-3xl sm:text-4xl text-primary"></i>
               </div>
               <h3 class="text-xl sm:text-2xl font-bold mb-2 bg-clip-text text-transparent 
                          bg-gradient-to-r from-primary via-secondary to-accent">
-                SecLab AI 智能助手
+                立心 LMS AI 学习助手
               </h3>
               <div class="max-w-sm mt-2 text-base-content/70 px-4 text-sm sm:text-base">
-                您的网络安全学习伙伴，可以解答安全知识、辅助安全学习、提供实验指导
+                你的 AI 微课学习伙伴，陪你读懂人工智能十讲，解答课程疑问、辅助理解核心概念
               </div>
               
               <!-- 快速问题建议 - 改进响应式布局 -->
@@ -110,7 +110,7 @@
                 >
                   <div class="chat-image avatar">
                     <div class="w-8 sm:w-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-md">
-                      <i class="fas fa-shield-alt text-xs sm:text-sm text-white"></i>
+                      <i class="fas fa-robot text-xs sm:text-sm text-white"></i>
                     </div>
                   </div>
                   <div class="chat-bubble chat-bubble-neutral p-0">
@@ -190,7 +190,7 @@
               <div class="join w-full">
                 <textarea
                   class="textarea textarea-bordered join-item flex-1 min-h-[60px] max-h-[120px] resize-none focus:outline-primary text-sm sm:text-base"
-                  placeholder="输入您的问题，例如：什么是XSS攻击？如何防范SQL注入？..."
+                  placeholder="输入你的问题，例如：什么是价值驱动？计算机视觉为什么难？..."
                   v-model="inputMessage"
                   @keydown.enter.ctrl="handleSendMessage"
                   ref="inputField"
@@ -262,76 +262,69 @@ const showThinking = ref(false)
 
 // 添加平台相关的背景信息
 const platformInfo = {
-  name: "SecLab安全实验平台",
-  description: "一个专注于网络安全教育的在线学习平台，提供理论学习和实践实验相结合的课程体系，支持多种类型的实验环境和互动学习方式。",
+  name: "立心之约 · 中学生人工智能微课",
+  description: "由北京大学与北京通用人工智能研究院联合出品、朱松纯教授领衔打造的面向中学生的人工智能微课系列，共十讲。课程以「给机器立心」为主线，从人工智能的现状趋势出发，依次走进计算机视觉、自然语言处理、认知推理、机器学习、智能机器人、多智能体、物理世界仿真模拟、人工智能音乐，最终回到人工智能在北大，引导高中生认识 AI、理解 AI、学会与 AI 共处。",
   features: [
-    "提供网络安全、密码学、渗透测试等多领域课程",
-    "支持在线实验环境，可进行实际操作练习",
-    "课程分为模块化学习，每个模块包含理论知识和实验任务",
-    "提供CTF竞赛训练和模拟环境",
-    "支持团队协作和项目实践",
-    "实时排行榜系统，记录学习成果和积分",
+    "十讲体系：涵盖 AI 总纲、计算机视觉、自然语言处理、认知推理、机器学习等主题",
+    "价值驱动：以「给机器立心」为主线，理解人工智能的价值与方向",
+    "乌鸦与鹦鹉：用生动故事辨析智能的本质与层次",
+    "面向高中生：语言通俗、案例丰富、循序渐进",
+    "名校出品：北京大学与北京通用人工智能研究院联合打造",
+    "互动练习：每讲配有思考题与知识点小测",
+    "积分与排行：记录学习成果，激励持续探索",
     "深度思考功能，展示AI分析过程",
     "学习进度跟踪，自适应学习路径推荐"
   ],
   courses: [
-    {name: "网络安全基础", topics: ["安全基本概念", "网络协议安全", "Web安全入门", "密码学基础"]},
-    {name: "密码学原理", topics: ["对称加密", "非对称加密", "哈希算法", "数字签名", "密钥交换协议"]},
-    {name: "Web安全进阶", topics: ["XSS攻击", "CSRF攻击", "SQL注入", "文件上传漏洞", "命令注入"]}
+    {name: "第一讲 人工智能的现状趋势与战略（总纲）", topics: ["给机器立心", "价值驱动", "乌鸦与鹦鹉", "AI 发展脉络"]},
+    {name: "第二讲 机器眼中的大千世界：计算机视觉", topics: ["图像识别", "卷积神经网络", "视觉理解的难点"]},
+    {name: "第三讲 语言与机器的火花碰撞：自然语言处理", topics: ["词向量", "语言模型", "机器翻译"]},
+    {name: "第四讲 认知科学与AI世界的邀约：认知推理", topics: ["知识表示", "常识推理", "因果关系"]},
+    {name: "第五讲 机器自我成长进步：机器学习", topics: ["监督学习", "过拟合", "神经网络"]},
+    {name: "第六讲 未来生活离不开的伙伴：智能机器人", topics: ["感知与行动", "运动控制", "人机协作"]},
+    {name: "第七讲 机器世界不孤单：多智能体", topics: ["合作与竞争", "博弈", "群体智能"]},
+    {name: "第八讲 机器生活的世界：物理世界仿真模拟", topics: ["仿真环境", "物理引擎", "虚实结合"]},
+    {name: "第九讲 舞动科技的音符：人工智能音乐", topics: ["音乐生成", "算法作曲", "AI 与艺术"]},
+    {name: "第十讲 人工智能在北大", topics: ["北大 AI 学科", "科研与人才培养", "人工智能通识教育"]}
   ],
   experimentModules: [
-    {id: 1, name: "SQL注入基础", type: "Web安全", difficulty: 2},
-    {id: 2, name: "数据库类型识别", type: "Web安全", difficulty: 2},
-    {id: 3, name: "注入点检测方法", type: "Web安全", difficulty: 3},
-    {id: 4, name: "理解SQL注入原理", type: "Web安全", difficulty: 3},
-    {id: 5, name: "SQL注入防御技术", type: "Web安全", difficulty: 4},
-    {id: 6, name: "绕过WAF技术", type: "Web安全", difficulty: 5},
-    {id: 7, name: "XSS跨站脚本攻击", type: "Web安全", difficulty: 3},
-    {id: 8, name: "CSRF跨站请求伪造", type: "Web安全", difficulty: 3},
-    {id: 9, name: "文件上传漏洞", type: "Web安全", difficulty: 4},
-    {id: 10, name: "密码学基础", type: "密码学", difficulty: 2},
-    {id: 11, name: "对称加密算法", type: "密码学", difficulty: 3},
-    {id: 12, name: "漏洞挖掘方法论", type: "系统安全", difficulty: 5},
-    {id: 13, name: "哈希函数与数字签名", type: "密码学", difficulty: 3},
-    {id: 14, name: "网络嗅探", type: "网络安全", difficulty: 3},
-    {id: 15, name: "ARP欺骗", type: "网络安全", difficulty: 3},
-    {id: 16, name: "DNS劫持", type: "网络安全", difficulty: 4},
-    {id: 17, name: "DDoS攻击原理", type: "网络安全", difficulty: 4},
-    {id: 18, name: "防火墙配置", type: "网络安全", difficulty: 3},
-    {id: 19, name: "Linux系统加固", type: "系统安全", difficulty: 3},
-    {id: 20, name: "Windows系统加固", type: "系统安全", difficulty: 3},
-    {id: 21, name: "权限提升", type: "系统安全", difficulty: 4},
-    {id: 22, name: "缓冲区溢出", type: "系统安全", difficulty: 5},
-    {id: 23, name: "渗透测试方法论", type: "渗透测试", difficulty: 3},
-    {id: 24, name: "信息收集", type: "渗透测试", difficulty: 2},
-    {id: 25, name: "漏洞扫描", type: "渗透测试", difficulty: 3},
-    {id: 26, name: "漏洞利用", type: "渗透测试", difficulty: 4},
-    {id: 27, name: "后渗透与权限维持", type: "渗透测试", difficulty: 4},
-    {id: 28, name: "渗透测试报告", type: "渗透测试", difficulty: 2}
+    {id: 1, name: "给机器立心与价值驱动", type: "总纲与战略", difficulty: 2},
+    {id: 2, name: "乌鸦与鹦鹉：智能的本质", type: "总纲与战略", difficulty: 3},
+    {id: 3, name: "图像识别与卷积神经网络", type: "感知与语言", difficulty: 3},
+    {id: 4, name: "计算机视觉为什么难", type: "感知与语言", difficulty: 4},
+    {id: 5, name: "词向量与语言模型", type: "感知与语言", difficulty: 3},
+    {id: 6, name: "知识表示与常识推理", type: "认知与学习", difficulty: 4},
+    {id: 7, name: "监督学习与过拟合", type: "认知与学习", difficulty: 3},
+    {id: 8, name: "神经网络与深度学习", type: "认知与学习", difficulty: 4},
+    {id: 9, name: "智能机器人的感知与行动", type: "智能体与机器人", difficulty: 3},
+    {id: 10, name: "多智能体合作与竞争", type: "智能体与机器人", difficulty: 4},
+    {id: 11, name: "物理世界仿真模拟", type: "智能体与机器人", difficulty: 4},
+    {id: 12, name: "算法作曲与音乐生成", type: "AI 与人文", difficulty: 3},
+    {id: 13, name: "人工智能在北大", type: "AI 与人文", difficulty: 2}
   ],
   scoreboard: {
-    description: "平台排行榜根据用户完成的实验任务和获得的总分进行排名",
+    description: "平台排行榜根据学生的学习进度、微课完成度和获得的积分进行排名",
     rankingFactors: [
-      "总分：完成实验任务获得的分数总和",
-      "完成任务数：成功完成的实验任务数量",
-      "难度系数：难度更高的实验获得更多分数",
-      "时间系数：实验完成时间影响分数获取",
-      "创新性：解题方法的创新性会获得额外加分"
+      "总积分：完成微课学习和答题获得的积分总和",
+      "完成讲数：已学完的微课讲数",
+      "答题正确率：知识点小测的正确率",
+      "学习活跃度：连续学习与互动情况",
+      "创新性：对开放性思考题的独特见解可获得额外加分"
     ],
     timeRanges: ["周排行", "月排行", "总排行"],
-    filters: ["实验类型", "班级", "时间范围"]
+    filters: ["年级", "班级", "时间范围"]
   },
   learningEnv: {
-    description: "平台提供两种实验环境：操作环境和靶机环境",
-    operationEnv: "操作环境是学生进行实验操作的工作区，提供各种安全工具和软件",
-    targetEnv: "靶机环境是实验目标系统，包含特定的漏洞或安全问题供学生发现和利用"
+    description: "平台提供两种主要学习资源：微课视频与互动练习",
+    operationEnv: "微课视频与讲义，帮助学生理解每一讲的核心概念与案例",
+    targetEnv: "互动练习题与思考题，帮助学生巩固知识、检验理解"
   },
   questionTypes: [
-    "选择题：测试基础概念理解",
-    "开放题：需要学生提供详细解答",
-    "实操题：需要在环境中完成特定操作并获取结果"
+    "选择题：测试对人工智能基础概念的理解",
+    "开放题：引导学生结合生活阐述对 AI 的看法",
+    "思考题：围绕「给机器立心」等主题展开思辨"
   ],
-  learningPath: "学习路径通常从基础安全概念开始，然后进入专项技术学习，建议按照由易到难的顺序完成实验。通常先完成基础实验模块，再尝试综合性实验，最后进行实战演练，形成完整的安全技能体系。"
+  learningPath: "学习路径从第一讲总纲开始，先理解人工智能的现状趋势与「给机器立心、价值驱动」的核心思想，再依次学习计算机视觉、自然语言处理、认知推理、机器学习等技术主题，进而了解智能机器人、多智能体与物理世界仿真，最后通过人工智能音乐与北大 AI 故事感受 AI 与人文的交融。建议按讲次顺序循序渐进。"
 }
 
 // 监听enableThinking变化，同步更新showThinking
@@ -341,12 +334,12 @@ watch(enableThinking, (newValue) => {
 
 // 快速问题建议
 const suggestions = [
-  "什么是XSS攻击？",
-  "如何防范SQL注入？",
-  "请介绍常见的网络安全威胁",
-  "什么是CSRF攻击？",
-  "密码学基础知识有哪些？",
-  "如何进行安全的代码审计？"
+  "什么是「给机器立心」？",
+  "价值驱动是什么意思？",
+  "计算机视觉为什么难？",
+  "词向量有什么用？",
+  "什么是过拟合？",
+  "乌鸦和鹦鹉有什么区别？"
 ]
 
 // 使用建议问题
@@ -422,12 +415,13 @@ const scrollToBottom = () => {
 // 检测用户问题是否与平台相关
 const isPlatformRelatedQuestion = (question: string): boolean => {
   const platformKeywords = [
-    "平台", "SecLab", "安全实验", "课程", "模块", "学习路径", "实验", "CTF", 
-    "怎么使用", "如何开始", "功能", "特点", "课程内容", "学习计划", "SecLab平台",
-    "安全学习", "实验环境", "账号", "注册", "登录", "学习进度", "证书", "成绩",
-    "积分", "排名", "排行榜", "实验任务", "操作环境", "靶机", "SQL注入", "XSS",
-    "Web安全", "网络安全", "密码学", "渗透测试", "系统安全", "学时", "难度",
-    "题解", "思考模式", "教师", "分数", "技能树", "实验报告", "练习"
+    "平台", "立心之约", "AI 微课", "微课", "课程", "讲", "学习路径", "学习", "讲座",
+    "怎么使用", "如何开始", "功能", "特点", "课程内容", "学习计划",
+    "AI", "人工智能", "价值驱动", "给机器立心", "乌鸦", "鹦鹉", "计算机视觉",
+    "自然语言处理", "认知推理", "机器学习", "智能机器人", "多智能体", "仿真",
+    "人工智能音乐", "北大", "过拟合", "词向量", "神经网络", "积分", "排名",
+    "排行榜", "答题", "小测", "年级", "班级", "学时", "难度", "思考题", "教师",
+    "分数", "学习进度", "证书", "成绩", "练习"
   ]
   
   // 转换为小写进行匹配
@@ -445,30 +439,31 @@ const enhanceUserQuestion = (question: string): string => {
   }
   
   // 为平台相关问题添加上下文
-  let enhancedPrompt = `关于SecLab安全实验平台的问题：${question}\n\n请根据以下SecLab平台详细信息回答：\n`;
+  let enhancedPrompt = `关于立心之约 AI 微课的问题：${question}\n\n请根据以下课程信息回答：\n`;
   
   // 检查是否包含特定关键词，有针对性地添加相关上下文
   const lowerQuestion = question.toLowerCase();
   
   // 添加课程相关信息
   if (lowerQuestion.includes("课程") || lowerQuestion.includes("学习")) {
-    enhancedPrompt += "【课程信息】\n";
+    enhancedPrompt += "【课程内容】\n";
     platformInfo.courses.forEach(course => {
       enhancedPrompt += `- ${course.name}：${course.topics.join("、")}\n`;
     });
     enhancedPrompt += "\n";
   }
   
-  // 添加实验模块相关信息
-  if (lowerQuestion.includes("实验") || lowerQuestion.includes("模块") || 
-      lowerQuestion.includes("练习") || lowerQuestion.includes("sql") || 
-      lowerQuestion.includes("xss") || lowerQuestion.includes("安全")) {
-    enhancedPrompt += "【实验模块】\n平台提供28个实验模块，包括：\n";
+  // 添加知识模块相关信息
+  if (lowerQuestion.includes("知识") || lowerQuestion.includes("模块") || 
+      lowerQuestion.includes("练习") || lowerQuestion.includes("视觉") || 
+      lowerQuestion.includes("语言") || lowerQuestion.includes("学习") ||
+      lowerQuestion.includes("智能")) {
+    enhancedPrompt += "【知识模块】\n课程共十讲，包含以下核心知识模块：\n";
     const modules = platformInfo.experimentModules.map(m => `${m.name}(难度:${m.difficulty}星)`);
     // 根据类型分组
     const moduleTypes = [...new Set(platformInfo.experimentModules.map(m => m.type))];
     moduleTypes.forEach(type => {
-      enhancedPrompt += `- ${type}领域：${platformInfo.experimentModules
+      enhancedPrompt += `- ${type}方向：${platformInfo.experimentModules
         .filter(m => m.type === type)
         .map(m => m.name)
         .join("、")}\n`;
@@ -483,26 +478,26 @@ const enhanceUserQuestion = (question: string): string => {
     enhancedPrompt += "【排名系统】\n";
     enhancedPrompt += `${platformInfo.scoreboard.description}\n`;
     enhancedPrompt += "排名依据：\n";
-    enhancedPrompt += "- 排行榜主要根据用户的总分进行排名，总分越高排名越靠前\n";
-    enhancedPrompt += "- 总分来源于完成的实验任务，难度越高的实验获得的分数越多\n";
-    enhancedPrompt += "- 可按实验类型、班级和时间范围筛选排行榜\n";
+    enhancedPrompt += "- 排行榜主要根据学生的学习积分进行排名，积分越高排名越靠前\n";
+    enhancedPrompt += "- 积分来源于完成微课学习与答题，完成度越高获得的积分越多\n";
+    enhancedPrompt += "- 可按年级、班级和时间范围筛选排行榜\n";
     enhancedPrompt += "\n";
   }
   
-  // 添加学习环境相关信息
-  if (lowerQuestion.includes("环境") || lowerQuestion.includes("靶机") || 
-      lowerQuestion.includes("操作") || lowerQuestion.includes("实验工具")) {
-    enhancedPrompt += "【学习环境】\n";
+  // 添加学习资源相关信息
+  if (lowerQuestion.includes("资源") || lowerQuestion.includes("视频") || 
+      lowerQuestion.includes("讲义") || lowerQuestion.includes("练习")) {
+    enhancedPrompt += "【学习资源】\n";
     enhancedPrompt += `${platformInfo.learningEnv.description}\n`;
-    enhancedPrompt += `- 操作环境：${platformInfo.learningEnv.operationEnv}\n`;
-    enhancedPrompt += `- 靶机环境：${platformInfo.learningEnv.targetEnv}\n\n`;
+    enhancedPrompt += `- 微课视频与讲义：${platformInfo.learningEnv.operationEnv}\n`;
+    enhancedPrompt += `- 互动练习：${platformInfo.learningEnv.targetEnv}\n\n`;
   }
   
-  // 如果没有匹配到特定类别，添加平台概览
+  // 如果没有匹配到特定类别，添加课程概览
   if (!enhancedPrompt.includes("【")) {
-    enhancedPrompt += "【平台概览】\n";
+    enhancedPrompt += "【课程概览】\n";
     enhancedPrompt += `${platformInfo.description}\n\n`;
-    enhancedPrompt += "主要功能：\n";
+    enhancedPrompt += "课程特色：\n";
     platformInfo.features.slice(0, 5).forEach(feature => {
       enhancedPrompt += `- ${feature}\n`;
     });
@@ -514,31 +509,31 @@ const enhanceUserQuestion = (question: string): string => {
 
 // 构建更详细的系统提示词
 const getSystemPrompt = (): string => {
-  return `你是SecLab安全实验平台（${platformInfo.name}）的AI助手，专注于网络安全领域知识和平台使用指导。
+  return `你是「立心之约 · 中学生人工智能微课」（${platformInfo.name}）的AI学习助手，面向高中生，专注于人工智能通识教育与课程内容讲解。
 
-平台信息：
+课程信息：
 ${platformInfo.description}
 
-平台主要功能：
+课程特色：
 ${platformInfo.features.map(f => "- " + f).join("\n")}
 
-平台课程内容：
+十讲课程内容：
 ${platformInfo.courses.map(c => `- ${c.name}：${c.topics.join("、")}`).join("\n")}
 
-平台实验模块：
-平台提供28个实验模块，涵盖Web安全、网络安全、密码学、系统安全和渗透测试五大领域。
-难度从1星(入门)到5星(专家级)不等，实验类型包括理论学习和实践操作。
-每个实验模块包含多个知识点和评分题目，完成后可获得相应积分。
+核心知识模块：
+课程共十讲，涵盖总纲与战略、感知与语言、认知与学习、智能体与机器人、AI 与人文五大方向。
+难度从1星(入门)到5星(进阶)不等，每个模块包含核心概念、典型案例与思考题。
+完成微课学习与答题后可获得相应积分。
 
 排行榜系统：
 ${platformInfo.scoreboard.description}
-排名主要根据用户的总分进行排名，总分高的用户排名靠前。总分通过完成实验任务获得，难度高的实验可获得更多分数。
+排名主要根据学生的学习积分进行排名，积分高的学生排名靠前。积分通过完成微课学习与答题获得。
 支持按${platformInfo.scoreboard.timeRanges.join("、")}查看排名，可按${platformInfo.scoreboard.filters.join("、")}进行筛选。
 
-学习环境：
+学习资源：
 ${platformInfo.learningEnv.description}
-- 操作环境：${platformInfo.learningEnv.operationEnv}
-- 靶机环境：${platformInfo.learningEnv.targetEnv}
+- 微课视频与讲义：${platformInfo.learningEnv.operationEnv}
+- 互动练习：${platformInfo.learningEnv.targetEnv}
 
 题目类型：
 ${platformInfo.questionTypes.join("\n")}
@@ -547,20 +542,20 @@ ${platformInfo.questionTypes.join("\n")}
 ${platformInfo.learningPath}
 
 你的角色：
-1. 回答网络安全领域的专业问题，提供准确、专业的知识
-2. 指导用户如何使用SecLab平台及其功能
-3. 推荐合适的学习路径和课程内容
-4. 解答实验过程中遇到的问题
-5. 帮助用户理解网络安全概念和实验原理
+1. 用高中生能听懂的语言，通俗讲解人工智能的核心概念与原理
+2. 围绕「给机器立心、价值驱动」这条主线，帮助学生理解 AI 的价值与方向
+3. 推荐合适的学习路径和微课讲次
+4. 解答学习过程中遇到的问题，善于用乌鸦与鹦鹉等故事化案例辅助说明
+5. 帮助学生理解计算机视觉、自然语言处理、认知推理、机器学习等技术主题
 6. 解释平台积分和排名规则
 
 回答规则：
-- 当用户询问平台相关问题时，基于上述平台信息提供具体、准确的回答
-- 当用户询问网络安全知识时，提供专业、清晰的解释
+- 当用户询问课程相关问题时，基于上述课程信息提供具体、准确的回答
+- 当用户询问人工智能知识时，用生动、清晰、易懂的方式解释，避免堆砌术语
 - 如不确定，请诚实地表明不知道，避免提供错误信息
-- 回答应使用专业且友好的语气，尽量简洁明了
-- 优先推荐平台上的学习资源和课程
-- 根据问题自然地引用相关实验模块，鼓励用户尝试相关实验`
+- 回答应使用亲切且鼓励的语气，尽量简洁明了
+- 优先推荐课程中的相关讲次和学习资源
+- 根据问题自然地引用相关知识模块，鼓励学生按讲次循序渐进学习`
 }
 
 // 调用OpenAI API
@@ -766,7 +761,7 @@ onMounted(() => {
   justify-content: center !important;
 }
 
-.avatar .fas.fa-shield-alt, .avatar .fas.fa-brain {
+.avatar .fas.fa-robot, .avatar .fas.fa-brain {
   display: block;
   line-height: 1;
   margin: 0;

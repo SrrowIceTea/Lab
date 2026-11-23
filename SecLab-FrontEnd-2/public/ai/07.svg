@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450" viewBox="0 0 800 450" role="img" aria-label="第7讲">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#241a72"/>
+      <stop offset="1" stop-color="#4f46e5"/>
+    </linearGradient>
+    <linearGradient id="bar" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#a5b4fc" stop-opacity=".35"/>
+      <stop offset="1" stop-color="#a5b4fc" stop-opacity=".95"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#a5b4fc" stop-opacity=".42"/>
+      <stop offset="1" stop-color="#a5b4fc" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0 L0 0 0 40" fill="none" stroke="#ffffff" stroke-opacity=".07" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <rect width="800" height="450" fill="url(#bg)"/>
+  <rect width="800" height="450" fill="url(#grid)"/>
+  <circle cx="620" cy="210" r="260" fill="url(#glow)"/>
+  <text x="742" y="410" text-anchor="end" font-family="'Microsoft YaHei',sans-serif" font-size="200" font-weight="700" fill="#ffffff" opacity=".06">07</text>
+
+  <g><line x1="580" y1="225" x2="500" y2="200" stroke="#fff" stroke-width="2.5" opacity=".3"/><line x1="580" y1="225" x2="580" y2="150" stroke="#fff" stroke-width="2.5" opacity=".3"/><line x1="580" y1="225" x2="660" y2="200" stroke="#fff" stroke-width="2.5" opacity=".3"/><line x1="580" y1="225" x2="580" y2="300" stroke="#fff" stroke-width="2.5" opacity=".3"/>
+  <polygon points="500.0,160.0 534.6,180.0 534.6,220.0 500.0,240.0 465.4,220.0 465.4,180.0" fill="none" stroke="#fff" stroke-width="3" opacity=".7"/><circle cx="500" cy="200" r="8" fill="#fff"/><polygon points="580.0,110.0 614.6,130.0 614.6,170.0 580.0,190.0 545.4,170.0 545.4,130.0" fill="none" stroke="#fff" stroke-width="3" opacity=".7"/><circle cx="580" cy="150" r="8" fill="#fff"/><polygon points="660.0,160.0 694.6,180.0 694.6,220.0 660.0,240.0 625.4,220.0 625.4,180.0" fill="none" stroke="#fff" stroke-width="3" opacity=".7"/><circle cx="660" cy="200" r="8" fill="#fff"/><polygon points="580.0,260.0 614.6,280.0 614.6,320.0 580.0,340.0 545.4,320.0 545.4,280.0" fill="none" stroke="#fff" stroke-width="3" opacity=".7"/><circle cx="580" cy="300" r="8" fill="#fff"/>
+  <polygon points="580.0,191.0 609.4,208.0 609.4,242.0 580.0,259.0 550.6,242.0 550.6,208.0" fill="none" stroke="#fff" stroke-width="3" opacity=".7"/>
+  <circle cx="580" cy="225" r="10" fill="#fff"/>
+  </g>
+
+  <rect x="58" y="58" width="126" height="34" rx="17" fill="#ffffff" fill-opacity=".16" stroke="#ffffff" stroke-opacity=".34"/>
+  <text x="121" y="81" text-anchor="middle" font-family="'Microsoft YaHei',sans-serif" font-size="17" font-weight="600" fill="#ffffff">第 7 讲</text>
+
+  <text x="58" y="184" font-family="'Microsoft YaHei','PingFang SC',sans-serif" font-size="46" font-weight="700" fill="#ffffff">机器世界</text><text x="58" y="244" font-family="'Microsoft YaHei','PingFang SC',sans-serif" font-size="46" font-weight="700" fill="#ffffff">不孤单</text>
+  <rect x="58" y="270" width="52" height="4" rx="2" fill="#a5b4fc"/>
+  <text x="58" y="310" font-family="'Segoe UI',Arial,sans-serif" font-size="14" letter-spacing="2.6" font-weight="600" fill="#ffffff" fill-opacity=".72">MULTI-AGENT SYSTEMS</text>
+
+  <rect x="0" y="440" width="800" height="10" fill="#a5b4fc" opacity=".85"/>
+</svg>

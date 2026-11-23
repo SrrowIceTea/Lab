@@ -14,7 +14,7 @@ const handleViewDetails = () => {
 </script>
 
 <template>
-  <div class="card bg-base-100 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
+  <div class="card bg-base-100 shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden h-full flex flex-col">
     <!-- 课程图片 -->
     <div class="relative h-48 overflow-hidden">
       <img 
@@ -72,7 +72,7 @@ const handleViewDetails = () => {
       </div>
       
       <!-- 操作按钮 -->
-      <div class="card-actions justify-end">
+      <div class="card-actions justify-end mt-auto">
         <button class="btn btn-primary btn-sm" @click="handleViewDetails">
           查看详情
         </button>

@@ -1,29 +1,32 @@
 /**
- * useLabState - 全局靶机运行状态（跨组件共享）
+ * useLabState - 全局课堂实践状态（跨组件共享）
  *
- * 用于 Module 页面 → FloatingChatButton / FloatingChat 的状态传递：
- *   - currentLabContainer : 当前运行的靶机容器名（空字符串=未启动）
- *   - labStartTime        : 靶机启动时刻
- *   - setLabRunning(name) : 靶机启动时调用
- *   - clearLab()          : 靶机关闭时调用
+ * 已移除 Docker / 靶机依赖。现在承担两件事：
+ *   1. 记录当前 AI 实践模块上下文（currentLabContext / labSessionId），
+ *      供右下角 AI 助手生成对话上下文；
+ *   2. 保存教学模拟终端的输出（ttyLogLines），AI 助手会把最近 80 行随
+ *      /api/chat 请求提交给后端，实现「读终端日志 + 对话」能力。
  *
- * Phase 3 新增（全域智能引导助手）：
- *   - guidanceAlerts      : proactive guidance 主动提示队列（SSE 流式接收）
- *   - ttyLogLines         : 最近 TTY 日志行（用于调试面板/触发源展示）
- *   - guidanceUnreadCount : 未读主动提示计数（FloatingChatButton 红点徽标）
+ * 兼容字段（currentLabContainer / containerName 等）保留但不再代表容器，
+ * 以减小对历史页面的影响；新代码请勿依赖它们。
  */
 import { ref } from 'vue'
 
-// 容器名 → 对人类友好的标签
+/**
+ * @deprecated 原靶机容器名映射，现仅保留为 AI 实践模块的兼容标签。
+ * 新代码请使用 findAiModuleById() 获取模块信息。
+ */
 export const CONTAINER_NAMES: Record<number, string> = {
-  1: 'sqli-lab-web-1',
-  2: 'xss-lab-web-1',
-  3: 'csrf-lab-web-1',
-  4: 'command-inject-web-1',
-  5: 'file-upload-lab-web-1',
-  6: 'directory-traversal-lab-web-1',
-  15: 'stack-overflow-lab-web-1',
-  16: 'protocol-analysis-lab-web-1',
+  1: 'AI 实践 01 · AI 应用大搜索',
+  2: 'AI 实践 02 · 图像识别初体验',
+  3: 'AI 实践 03 · 让机器给句子分类',
+  4: 'AI 实践 04 · 搭一个知识图谱',
+  5: 'AI 实践 05 · 训练第一个分类器',
+  6: 'AI 实践 06 · 设计一台服务机器人',
+  7: 'AI 实践 07 · 多智能体协作推演',
+  8: 'AI 实践 08 · 搭建简易物理仿真',
+  9: 'AI 实践 09 · 生成一段 AI 旋律',
+  10: 'AI 实践 10 · 我的 AI 学习计划',
 }
 
 /** 当前靶机容器名，空字符串表示未启动 */
@@ -264,4 +267,17 @@ export function addTtyLogLine(line: TtyLogLine) {
 /** 清空所有 TTY 日志行 */
 export function clearTtyLogLines() {
   ttyLogLines.value = []
+}
+
+// ─────────────────────────────────────────
+//  视频伴侣：当前播放位置（供 FloatingChat 注入对话上下文）
+// ─────────────────────────────────────────
+export const videoPosition = ref<{ lecture: number; seconds: number } | null>(null)
+
+export function setVideoPosition(lecture: number, seconds: number) {
+  videoPosition.value = { lecture, seconds }
+}
+
+export function clearVideoPosition() {
+  videoPosition.value = null
 }

@@ -4,12 +4,29 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Dify Agent configuration
-DIFY_API_URL = os.getenv("DIFY_API_URL", "")
-DIFY_API_KEY = os.getenv("DIFY_API_KEY", "")
-DIFY_WORKFLOW_ID = os.getenv("DIFY_WORKFLOW_ID", "")
-DIFY_APP_ID = os.getenv("DIFY_APP_ID", "")
+# ── 本地 Agent / 外部大模型（OpenAI Chat Completions 兼容）──────────
+# 任意兼容 /v1/chat/completions 的服务均可：DeepSeek、通义、OpenAI、本地 vLLM 等
+LLM_API_BASE = os.getenv("LLM_API_BASE", "https://api.deepseek.com/v1")
+LLM_API_KEY = os.getenv("LLM_API_KEY", "")
+LLM_MODEL = os.getenv("LLM_MODEL", "deepseek-chat")
+LLM_TIMEOUT = int(os.getenv("LLM_TIMEOUT", "120"))
+LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.3"))
+LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "2048"))
+LLM_GUIDANCE_MODEL = os.getenv("LLM_GUIDANCE_MODEL", "")
 ENABLE_FAKE_LLM_FOR_TEST = os.getenv("ENABLE_FAKE_LLM_FOR_TEST", "false")
+
+# RAG（供应商无关）：local 本地检索 / hybrid 本地+题目样例 / api 预留外部检索
+RAG_MODE = os.getenv("RAG_MODE", "local")
+ENABLE_LOCAL_RAG = os.getenv("ENABLE_LOCAL_RAG", "true").lower() in ("true", "1", "yes")
+STRICT_SOURCE_EXAMPLE_VALIDATION = os.getenv(
+    "STRICT_SOURCE_EXAMPLE_VALIDATION", "false"
+).lower() in ("true", "1", "yes")
+
+# 兼容旧配置：若仍有人设置 DIFY_*，映射到通用配置（过渡期用）
+if not LLM_API_KEY and os.getenv("DIFY_API_KEY"):
+    LLM_API_KEY = os.getenv("DIFY_API_KEY", "")
+    if not os.getenv("LLM_API_BASE") and os.getenv("DIFY_API_URL"):
+        LLM_API_BASE = os.getenv("DIFY_API_URL", "")
 
 # AI agent service listener
 SERVICE_HOST = os.getenv("SERVICE_HOST", "0.0.0.0")

@@ -119,7 +119,7 @@ function evidenceEventLabel(eventType: string): string {
     COMMAND_EXEC: '执行命令',
     AI_INTERACTION: 'AI 交互',
     ERROR_OCCURRED: '发生错误',
-    FLAG_SUBMIT: '提交 Flag',
+    FLAG_SUBMIT: '提交实践答案',
   }[eventType] || eventType
 }
 

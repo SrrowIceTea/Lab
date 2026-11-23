@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 from difflib import SequenceMatcher
 from typing import Any, Optional
 from uuid import uuid4
 
-import httpx
+import config
+import llm_client
 
 from knowledge_repository import list_knowledge_units
 from profile_repository import get_latest_student_profile
@@ -113,7 +113,16 @@ SOURCE_TYPE_PRIORITY = {
     "GENERATED_QUESTION": 5,
 }
 
-ALLOWED_RAG_MODES = {"local", "hybrid", "dify"}
+# RAG 模式：local 仅本地检索；hybrid 本地检索 + 模型自由发挥；api 仅保留枚举，不做远程检索。
+ALLOWED_RAG_MODES = {"local", "hybrid", "api"}
+
+# 出题用的系统提示词，同时用于 llm_client 的 messages 构造与 build_generation_prompt 的 system 字段。
+_QUESTION_SYSTEM_PROMPT = (
+    "你是一名网络安全教学出题助手。请基于提供的知识单元生成一题训练题。"
+    "题目必须严格依据输入知识，不得编造超出知识范围的背景设定。"
+    "输出必须是合法 JSON，不要输出 markdown。"
+    "题目用于授权教学实验平台，不得包含真实攻击目标、真实恶意载荷、绕过现实系统的操作指令。"
+)
 
 
 class QuestionGenerationError(Exception):
@@ -385,12 +394,13 @@ def _json_block(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, indent=2)
 
 
-def _get_dify_rag_mode() -> str:
-    configured = str(os.getenv("DIFY_RAG_MODE") or "").strip().lower()
+def _get_rag_mode() -> str:
+    """从新配置读取 RAG 模式；兼容旧值 dify（按 hybrid 处理）。"""
+    configured = str(config.RAG_MODE or "").strip().lower()
+    if configured == "dify":
+        return "hybrid"
     if configured in ALLOWED_RAG_MODES:
         return configured
-    if _to_bool(os.getenv("ENABLE_DIFY_KNOWLEDGE_RAG")):
-        return "dify"
     return "local"
 
 
@@ -414,12 +424,13 @@ def _build_retrieval_query(req: dict[str, Any]) -> str:
 
 
 def _build_rag_context(req: dict[str, Any], example_questions: list[dict[str, Any]]) -> dict[str, Any]:
-    mode = _get_dify_rag_mode()
+    mode = _get_rag_mode()
     return {
         "ragMode": mode,
         "retrievalQuery": _build_retrieval_query(req),
         "retrievalMetadata": _build_retrieval_metadata(req),
         "localExampleQuestionIds": [item["exampleQuestionId"] for item in example_questions],
+        # 以下两个字段为兼容旧返回契约保留：本地方案下由本地检索结果承载，恒为空。
         "difySourceExampleQuestionIds": [],
         "difyRetrievedExampleSnippets": [],
         "sourceValidationMode": "local_strict" if mode == "local" else "warning_only",
@@ -438,12 +449,7 @@ def build_generation_prompt(
     rag_context = rag_context or _build_rag_context(req, example_questions)
     example_question_ids = [item["exampleQuestionId"] for item in example_questions]
     prompt = {
-        "system": (
-            "你是一名网络安全教学出题助手。请基于提供的知识单元生成一题训练题。"
-            "题目必须严格依据输入知识，不得编造超出知识范围的背景设定。"
-            "输出必须是合法 JSON，不要输出 markdown。"
-            "题目用于授权教学实验平台，不得包含真实攻击目标、真实恶意载荷、绕过现实系统的操作指令。"
-        ),
+        "system": _QUESTION_SYSTEM_PROMPT,
         "task": {
             "dimension": req["dimension"],
             "difficulty": req["difficulty"],
@@ -493,8 +499,8 @@ def build_generation_prompt(
                 "Do not copy the example explanation.",
                 "Generate a new question grounded in knowledgeUnitsJson.",
                 "If exampleQuestionsJson is not empty, return sourceExampleQuestionIds using only IDs from exampleQuestionsJson.",
-                "If ragMode is dify and the workflow retrieves standard examples, return sourceExampleQuestionIds using only IDs from retrieved example metadata.",
-                "If no standard examples are available from either exampleQuestionsJson or Dify retrieval metadata, return sourceExampleQuestionIds as an empty array.",
+                "如果 ragMode 为 api，仅使用 exampleQuestionsJson 中出现的 ID 返回 sourceExampleQuestionIds，不做任何远程检索。",
+                "如果 exampleQuestionsJson 为空，sourceExampleQuestionIds 必须返回空数组。",
             ],
             "teachingQualityRules": [
                 "Return JSON only. Do not return markdown.",
@@ -660,232 +666,36 @@ def _default_quality_fields(question: dict[str, Any], req: dict[str, Any], knowl
     }
 
 
-async def _read_dify_streaming_answer(
-    client: httpx.AsyncClient,
-    api_url: str,
-    headers: dict[str, str],
-    user_token: str,
-    prompt: str,
-    dify_inputs: dict[str, Any],
-) -> str:
-    answer_parts: list[str] = []
-    async with client.stream(
-        "POST",
-        f"{api_url.rstrip('/')}/chat-messages",
-        headers=headers,
-        json={
-            "query": prompt,
-            "response_mode": "streaming",
-            "conversation_id": "",
-            "user": user_token,
-            "inputs": {
-                "scenario": "profile_single_question_generation",
-                **dify_inputs,
-            },
-        },
-    ) as response:
-        response.raise_for_status()
-        async for line in response.aiter_lines():
-            text = line.strip()
-            if not text.startswith("data:"):
-                continue
-            data = text.removeprefix("data:").strip()
-            if not data or data == "[DONE]":
-                continue
-            try:
-                payload = json.loads(data)
-            except json.JSONDecodeError:
-                continue
-            if payload.get("event") == "error":
-                raise QuestionGenerationError(
-                    "LLM_REQUEST_FAILED",
-                    "Dify request failed",
-                    status_code=502,
-                    details={
-                        "statusCode": payload.get("status"),
-                        "responseText": str(payload.get("message") or "")[:500],
-                    },
-                )
-            answer = payload.get("answer")
-            if answer:
-                answer_parts.append(str(answer))
-    return "".join(answer_parts)
-
-
-def _extract_dify_output_text(payload: dict[str, Any]) -> str:
-    outputs = payload.get("data", {}).get("outputs")
-    if isinstance(outputs, dict):
-        for key in ("result", "answer", "text", "output"):
-            value = outputs.get(key)
-            if isinstance(value, (dict, list)):
-                return _json_block(value)
-            if value:
-                return str(value)
-        for value in outputs.values():
-            if isinstance(value, (dict, list)):
-                return _json_block(value)
-            if isinstance(value, str) and value.strip():
-                return value
-    for key in ("answer", "text", "result"):
-        value = payload.get(key)
-        if isinstance(value, (dict, list)):
-            return _json_block(value)
-        if value:
-            return str(value)
-    return ""
-
-
-def _extract_dify_metadata(payload: dict[str, Any]) -> dict[str, Any]:
-    metadata = {
-        "metadata": payload.get("metadata") or {},
-        "dataMetadata": payload.get("data", {}).get("metadata") or {},
-    }
-    outputs = payload.get("data", {}).get("outputs")
-    if isinstance(outputs, dict):
-        metadata["outputsMetadata"] = outputs.get("metadata") or outputs.get("retrieval_metadata") or {}
-        metadata["outputsRetrieval"] = (
-            outputs.get("retrieval")
-            or outputs.get("retrievalResults")
-            or outputs.get("retrieval_results")
-            or outputs.get("source_documents")
-            or []
-        )
-    return metadata
-
-
-def _build_dify_inputs(
-    prompt: str,
-    req: dict[str, Any],
-    knowledge_units: list[dict[str, Any]],
-    recommendation: dict[str, Any],
-    example_questions: list[dict[str, Any]],
-    rag_context: dict[str, Any],
-) -> dict[str, Any]:
-    dify_inputs = {
-        "prompt": prompt,
-        "dimension": req["dimension"],
-        "difficulty": req["difficulty"],
-        "questionType": req["question_type"],
-        "question_type": req["question_type"],
-        "knowledgeTags": req["knowledge_tags"],
-        "knowledge_tags": req["knowledge_tags"],
-        "recommendationReason": recommendation.get("reason"),
-        "moduleId": req["module_id"],
-        "courseId": req["course_id"],
-        "ragMode": rag_context["ragMode"],
-        "retrievalQuery": rag_context["retrievalQuery"],
-        "retrievalMetadata": rag_context["retrievalMetadata"],
-        "knowledgeUnitsJson": _json_block(knowledge_units),
-        "questionIndex": req.get("question_index"),
-        "questionSetCount": req.get("question_set_count"),
-        "questionAngle": req.get("question_angle"),
-        "avoidDuplicateInstruction": req.get("avoid_duplicate_instruction"),
-        "previousQuestionStems": req.get("previous_question_stems") or [],
-    }
-    if rag_context["ragMode"] in {"local", "hybrid"}:
-        dify_inputs["exampleQuestionsJson"] = _json_block(example_questions)
-    return dify_inputs
-
-
-async def _call_dify_chat(
-    prompt: str,
-    req: dict[str, Any],
-    knowledge_units: list[dict[str, Any]],
-    recommendation: dict[str, Any],
-    example_questions: list[dict[str, Any]],
-    rag_context: dict[str, Any],
-) -> dict[str, Any]:
-    api_url = str(os.getenv("DIFY_API_URL") or "").strip()
-    api_key = str(os.getenv("DIFY_API_KEY") or "").strip()
-    if not api_url or not api_key:
-        raise QuestionGenerationError(
-            "LLM_NOT_CONFIGURED",
-            "Dify API is not configured",
-            status_code=503,
-        )
-
-    workflow_id = str(os.getenv("DIFY_WORKFLOW_ID") or os.getenv("DIFY_APP_ID") or "").strip() or None
-    user_token = f"profile-training-{req['user_id']}"
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-    dify_inputs = _build_dify_inputs(prompt, req, knowledge_units, recommendation, example_questions, rag_context)
+async def _call_local_agent(prompt: str) -> dict[str, Any]:
+    """通过本地 Agent 调用 OpenAI 兼容大模型，并解析出题目 JSON。"""
+    messages = llm_client.build_messages(_QUESTION_SYSTEM_PROMPT, prompt)
     try:
-        async with httpx.AsyncClient(timeout=90.0) as client:
-            if workflow_id:
-                response = await client.post(
-                    f"{api_url.rstrip('/')}/workflows/run",
-                    headers=headers,
-                    json={
-                        "inputs": dify_inputs,
-                        "response_mode": "blocking",
-                        "user": user_token,
-                    },
-                )
-                response.raise_for_status()
-                payload = response.json()
-                raw_text = _extract_dify_output_text(payload)
-                generator = "dify_workflow"
-            else:
-                try:
-                    response = await client.post(
-                        f"{api_url.rstrip('/')}/chat-messages",
-                        headers=headers,
-                        json={
-                            "query": prompt,
-                            "response_mode": "blocking",
-                            "conversation_id": "",
-                            "user": user_token,
-                            "inputs": {
-                                "scenario": "profile_single_question_generation",
-                                **dify_inputs,
-                            },
-                        },
-                    )
-                    response.raise_for_status()
-                    payload = response.json()
-                    raw_text = _extract_dify_output_text(payload)
-                except httpx.HTTPStatusError as exc:
-                    if exc.response.status_code != 400 or "does not support blocking mode" not in exc.response.text.lower():
-                        raise
-                    raw_text = await _read_dify_streaming_answer(
-                        client,
-                        api_url,
-                        headers,
-                        user_token,
-                        prompt,
-                        dify_inputs,
-                    )
-                    payload = {}
-                generator = "dify_chat"
-    except httpx.HTTPStatusError as exc:
+        parsed = await llm_client.chat_json(messages)
+    except ValueError as exc:
         raise QuestionGenerationError(
-            "LLM_REQUEST_FAILED",
-            "Dify request failed",
+            "INVALID_LLM_OUTPUT",
+            f"大模型输出不是合法 JSON：{exc}",
             status_code=502,
-            details={"statusCode": exc.response.status_code, "responseText": exc.response.text[:500]},
         ) from exc
-    except httpx.HTTPError as exc:
+    except Exception as exc:
         raise QuestionGenerationError(
             "LLM_REQUEST_FAILED",
-            "Dify request failed",
+            f"大模型请求失败：{exc}",
             status_code=502,
             details={"error": str(exc)},
         ) from exc
-
-    parsed = _extract_json_object(raw_text)
-    if not parsed:
+    if not isinstance(parsed, dict):
         raise QuestionGenerationError(
             "INVALID_LLM_OUTPUT",
-            "LLM output is not valid JSON",
+            "大模型输出不是合法 JSON 对象",
             status_code=502,
         )
     return {
-        "generator": generator,
+        "generator": "local-agent",
         "payload": parsed,
-        "difyMetadata": _extract_dify_metadata(payload),
-        "difyInputs": dify_inputs,
+        # 兼容字段：本地方案无第三方平台元数据/输入，恒为空。
+        "difyMetadata": {},
+        "difyInputs": {},
     }
 
 
@@ -896,7 +706,15 @@ async def generate_question_with_llm(
     example_questions: list[dict[str, Any]],
     rag_context: dict[str, Any],
 ) -> dict[str, Any]:
-    if _to_bool(os.getenv("ENABLE_FAKE_LLM_FOR_TEST")):
+    prompt = build_generation_prompt(req, knowledge_units, recommendation, example_questions, rag_context)
+    fake_mode = _to_bool(config.ENABLE_FAKE_LLM_FOR_TEST)
+    try:
+        return await _call_local_agent(prompt)
+    except QuestionGenerationError as exc:
+        if not fake_mode or exc.code not in {"INVALID_LLM_OUTPUT", "LLM_REQUEST_FAILED"}:
+            raise
+        # 测试模式：llm_client 内置假回复不是题目 JSON，
+        # 用本地样例生成器产出合法题目，保证后续校验与落库链路完整。
         payload = _fake_generate_question(req, knowledge_units)
         payload["sourceExampleQuestionIds"] = [item["exampleQuestionId"] for item in example_questions[:1]]
         return {
@@ -905,8 +723,6 @@ async def generate_question_with_llm(
             "difyMetadata": {},
             "difyInputs": {},
         }
-    prompt = build_generation_prompt(req, knowledge_units, recommendation, example_questions, rag_context)
-    return await _call_dify_chat(prompt, req, knowledge_units, recommendation, example_questions, rag_context)
 
 
 def _find_hard_block_matches(value: str) -> list[str]:
@@ -1007,7 +823,8 @@ def _walk_values(value: Any):
             yield from _walk_values(child)
 
 
-def _extract_dify_example_sources(metadata: dict[str, Any]) -> tuple[list[str], list[dict[str, Any]]]:
+def _extract_model_example_sources(metadata: dict[str, Any]) -> tuple[list[str], list[dict[str, Any]]]:
+    """从模型返回的兼容元数据中提取范例题 ID 与片段（本地方案下通常为空）。"""
     ids: list[str] = []
     snippets: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
@@ -1112,13 +929,14 @@ def validate_generated_question(
     rag_context: Optional[dict[str, Any]] = None,
     dify_metadata: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
+    # dify_metadata 为兼容旧签名保留：本地方案下由 example_questions 承载范例来源。
     example_questions = example_questions or []
     rag_context = rag_context or _build_rag_context(req, example_questions)
-    dify_source_ids, dify_snippets = _extract_dify_example_sources(dify_metadata or {})
-    if dify_source_ids:
-        rag_context["difySourceExampleQuestionIds"] = dify_source_ids
-    if dify_snippets:
-        rag_context["difyRetrievedExampleSnippets"] = dify_snippets
+    model_source_ids, model_snippets = _extract_model_example_sources(dify_metadata or {})
+    if model_source_ids:
+        rag_context["difySourceExampleQuestionIds"] = model_source_ids
+    if model_snippets:
+        rag_context["difyRetrievedExampleSnippets"] = model_snippets
     raw_quality_flags = raw.get("qualityFlags") if "qualityFlags" in raw else raw.get("quality_flags")
     if raw_quality_flags is not None and not isinstance(raw_quality_flags, list):
         raise QuestionGenerationError("INVALID_GENERATED_QUESTION", "qualityFlags must be an array", status_code=502)
@@ -1211,7 +1029,8 @@ def validate_generated_question(
     local_standard_ids = {item["exampleQuestionId"] for item in list_standard_questions()}
     unknown_example_ids = [item for item in question["sourceExampleQuestionIds"] if item not in valid_example_ids]
     if unknown_example_ids:
-        strict_validation = _to_bool(os.getenv("STRICT_SOURCE_EXAMPLE_VALIDATION"))
+        # 严格校验：来源 ID 必须来自本次本地检索返回的题目样例。
+        strict_validation = _to_bool(config.STRICT_SOURCE_EXAMPLE_VALIDATION)
         if rag_context["ragMode"] == "local" or strict_validation:
             raise QuestionGenerationError(
                 "INVALID_GENERATED_QUESTION",
@@ -1220,11 +1039,9 @@ def validate_generated_question(
                 details={"unknownSourceExampleQuestionIds": unknown_example_ids},
             )
         local_known_unknown = [item for item in unknown_example_ids if item in local_standard_ids]
-        dify_known_unknown = [item for item in unknown_example_ids if item in dify_source_ids]
         if len(local_known_unknown) == len(unknown_example_ids):
+            # ID 属于本地规范题库，只是不在本次检索结果中。
             rag_context["sourceValidationMode"] = "local_strict"
-        elif len(dify_known_unknown) == len(unknown_example_ids):
-            rag_context["sourceValidationMode"] = "dify_metadata"
         else:
             rag_context["sourceValidationMode"] = "warning_only"
             _append_quality_flag(question, "sourceExampleQuestionIds 未能在本地规范题库中验证")
@@ -1233,7 +1050,7 @@ def validate_generated_question(
     if example_questions and not question["sourceExampleQuestionIds"]:
         _append_quality_flag(question, "未返回规范题目来源标识")
     if not example_questions:
-        rag_context["exampleQuestionSimilarityChecked"] = bool(dify_snippets)
+        rag_context["exampleQuestionSimilarityChecked"] = bool(model_snippets)
         if not question["sourceExampleQuestionIds"]:
             question["sourceExampleQuestionIds"] = []
 
@@ -1245,7 +1062,7 @@ def validate_generated_question(
             status_code=502,
             details=duplicate_match,
         )
-    snippet_duplicate_match = _check_snippet_similarity(question["stem"], dify_snippets)
+    snippet_duplicate_match = _check_snippet_similarity(question["stem"], model_snippets)
     if snippet_duplicate_match:
         raise QuestionGenerationError(
             "DUPLICATE_EXAMPLE_QUESTION",
@@ -1253,8 +1070,8 @@ def validate_generated_question(
             status_code=502,
             details=snippet_duplicate_match,
         )
-    if not example_questions and rag_context["ragMode"] == "dify" and not dify_snippets:
-        _append_quality_flag(question, "无法执行完整范例题相似度校验，原因：Dify 未返回范例题全文")
+    if not example_questions and rag_context["ragMode"] == "api" and not model_snippets:
+        _append_quality_flag(question, "无法执行完整范例题相似度校验，原因：未获取到范例题全文")
     _check_answer_similarity(question, example_questions)
 
     safe_texts = [
@@ -1322,7 +1139,8 @@ def _pick_module_id(req: dict[str, Any], knowledge_units: list[dict[str, Any]]) 
 
 
 def _retrieve_standard_examples(req: dict[str, Any]) -> list[dict[str, Any]]:
-    if _get_dify_rag_mode() == "dify":
+    # 本地 RAG 始终生效：三种模式均从本地题库取样例，api 模式也不做远程检索。
+    if not config.ENABLE_LOCAL_RAG:
         return []
     return retrieve_example_questions(
         knowledge_tags=req["knowledge_tags"],

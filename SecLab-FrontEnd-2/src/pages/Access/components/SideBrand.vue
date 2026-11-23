@@ -11,8 +11,8 @@
       <!-- Logo -->
       <div class="mb-8 magictime spaceInDown">
         <div class="inline-block">
-          <h1 class="text-5xl font-bold">
-            Sec <span class="text-primary animate-pulse">Lab</span>
+          <h1 class="text-4xl font-bold tracking-tight">
+            立心 <span class="text-primary animate-pulse">LMS</span>
           </h1>
         </div>
       </div>
@@ -21,10 +21,10 @@
       <div class="space-y-6 mb-12 magictime spaceInUp">
         <h2 class="text-3xl font-bold bg-clip-text text-transparent 
                    bg-gradient-to-r from-primary via-secondary to-accent">
-          网络安全实验平台
+          立心 LMS 学习管理平台
         </h2>
         <p class="text-xl text-base-content/70 leading-relaxed">
-          从基础到进阶，系统化的安全实验课程
+          十节北大名师微课，从 AI 原理到前沿应用
         </p>
       </div>
 
@@ -62,12 +62,12 @@ const features = [
   {
     icon: 'fa-laptop-code',
     title: '实战演练',
-    description: '真实环境模拟，动手实践提升安全技能'
+    description: '可视化实验环境，动手实践理解算法原理'
   },
   {
     icon: 'fa-shield-alt',
-    title: '安全保障',
-    description: '标准化的实验环境，确保学习过程安全可控'
+    title: '稳定可靠',
+    description: '标准化的实验环境，学习过程稳定可控'
   }
 ]
 </script>

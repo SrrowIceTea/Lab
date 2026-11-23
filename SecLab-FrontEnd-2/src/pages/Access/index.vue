@@ -110,7 +110,7 @@ const handleRegister = async (registerForm: RegisterForm) => {
                 {{ isLogin ? '登录' : '注册账号' }}
               </h1>
               <p class="text-sm text-base-content/60">
-                {{ isLogin ? '使用你的 SecLab 账号继续学习。' : '创建 SecLab 账号，进入安全实验平台。' }}
+                {{ isLogin ? '使用你的立心 LMS 账号继续学习。' : '创建立心 LMS 账号，开启 AI 学习之旅。' }}
               </p>
             </div>
           </div>

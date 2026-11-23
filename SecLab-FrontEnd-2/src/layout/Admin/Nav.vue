@@ -50,7 +50,7 @@ const menuItems = [
           <i class="fas fa-shield-alt"></i>
         </div>
         <div>
-          <div class="text-lg font-bold">SecLab Teacher</div>
+          <div class="text-lg font-bold">立心 LMS 管理端</div>
           <div class="text-xs text-base-content/60">教学管理端</div>
         </div>
       </div>

@@ -72,7 +72,7 @@ class TeacherApiErrorTest(unittest.TestCase):
     def test_provider_format_failure_returns_a_useful_business_status(self):
         error = main._teacher_repo_error(
             main.TeacherAnalysisProviderError(
-                "Dify 已返回内容，但结果格式不符合教学分析要求，请检查 Agent 提示词。"
+                "大模型已返回内容，但结果格式不符合教学分析要求，请检查提示词和输出格式。"
             )
         )
 
@@ -124,74 +124,74 @@ class TeacherApiErrorTest(unittest.TestCase):
 
 
 class AiAnalysisHealthTest(unittest.IsolatedAsyncioTestCase):
-    async def test_missing_dify_configuration_is_reported_without_secret_values(self):
-        with (
-            patch.object(main, "DIFY_API_URL", ""),
-            patch.object(main, "DIFY_API_KEY", ""),
-        ):
-            result = await main._probe_dify_configuration()
+    async def test_missing_llm_configuration_is_reported_without_secret_values(self):
+        with patch.object(main.llm_client, "is_configured", return_value=False):
+            result = await main._probe_llm_configuration()
 
         self.assertEqual(
             result,
             {
                 "configured": False,
                 "providerReachable": False,
-                "message": "Dify 尚未配置。",
+                "message": "大模型尚未配置，请设置 LLM_API_BASE / LLM_API_KEY / LLM_MODEL。",
             },
         )
 
-    async def test_configured_dify_is_probed_through_parameters_endpoint(self):
+    async def test_configured_llm_is_probed_through_chat_completions_endpoint(self):
         response = MagicMock()
-        response.status_code = 200
         response.raise_for_status.return_value = None
         client = AsyncMock()
         client.__aenter__.return_value = client
         client.__aexit__.return_value = False
-        client.get.return_value = response
+        client.post.return_value = response
 
         with (
-            patch.object(main, "DIFY_API_URL", "https://api.dify.example/v1/"),
-            patch.object(main, "DIFY_API_KEY", "secret-key"),
+            patch.object(main.llm_client, "is_configured", return_value=True),
+            patch.object(main.config, "LLM_API_BASE", "https://api.llm.example/v1"),
+            patch.object(main.config, "LLM_API_KEY", "secret-key"),
+            patch.object(main.config, "LLM_MODEL", "test-model"),
             patch.object(main.httpx, "AsyncClient", return_value=client),
         ):
-            result = await main._probe_dify_configuration()
+            result = await main._probe_llm_configuration()
 
         self.assertTrue(result["configured"])
         self.assertTrue(result["providerReachable"])
-        self.assertEqual(result["message"], "Dify 连接正常。")
-        client.get.assert_awaited_once_with(
-            "https://api.dify.example/v1/parameters",
-            headers={"Authorization": "Bearer secret-key"},
-        )
+        self.assertEqual(result["message"], "大模型接口连接正常。")
+        self.assertEqual(result["provider"], "https://api.llm.example/v1")
+        self.assertEqual(result["model"], "test-model")
+        client.post.assert_awaited_once()
+        call_args, call_kwargs = client.post.await_args
+        self.assertEqual(call_args[0], "https://api.llm.example/v1/chat/completions")
+        self.assertEqual(call_kwargs["headers"]["Authorization"], "Bearer secret-key")
 
-    async def test_dify_probe_failure_returns_safe_message(self):
+    async def test_llm_probe_failure_returns_safe_message(self):
         client = AsyncMock()
         client.__aenter__.return_value = client
         client.__aexit__.return_value = False
-        client.get.side_effect = httpx.ConnectError("connection failed")
+        client.post.side_effect = httpx.ConnectError("connection failed")
 
         with (
-            patch.object(main, "DIFY_API_URL", "https://api.dify.example/v1"),
-            patch.object(main, "DIFY_API_KEY", "secret-key"),
+            patch.object(main.llm_client, "is_configured", return_value=True),
+            patch.object(main.config, "LLM_API_BASE", "https://api.llm.example/v1"),
             patch.object(main.httpx, "AsyncClient", return_value=client),
         ):
-            result = await main._probe_dify_configuration()
+            result = await main._probe_llm_configuration()
 
         self.assertEqual(result["configured"], True)
         self.assertEqual(result["providerReachable"], False)
-        self.assertEqual(result["message"], "Dify 已配置，但当前无法连接。")
+        self.assertEqual(result["message"], "大模型已配置，但当前无法连接。")
 
 
 class AiAnalysisProviderFailureTest(unittest.TestCase):
     def test_timeout_is_reported_as_generation_timeout_not_missing_configuration(self):
         message = provider_failure_message(TimeoutError("stream stalled"))
 
-        self.assertIn("已连接", message)
         self.assertIn("生成超时", message)
         self.assertIn("额度", message)
+        self.assertNotIn("尚未配置", message)
 
     def test_rate_limit_is_reported_as_quota_or_rate_limit(self):
-        request = httpx.Request("POST", "https://api.dify.example/v1/chat-messages")
+        request = httpx.Request("POST", "https://api.llm.example/v1/chat/completions")
         response = httpx.Response(429, request=request)
         message = provider_failure_message(httpx.HTTPStatusError("rate limited", request=request, response=response))
 

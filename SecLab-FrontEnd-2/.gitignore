@@ -33,3 +33,5 @@ dist/
 *.7z
 *.zip
 *.log
+# 课程视频（本地演示用大文件，不入库）
+public/video/

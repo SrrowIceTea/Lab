@@ -32,7 +32,7 @@ onMounted(() => {
 const cards = [
   {
     title: '课程学习',
-    description: '探索我们精心设计的课程体系，从基础到进阶，循序渐进地掌握网络安全知识。',
+    description: '十节精心设计的 AI 微课，从基础概念到前沿应用，循序渐进地理解人工智能。',
     svgPath: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253',
     buttonText: '开始学习',
     buttonClass: 'btn-primary',
@@ -42,7 +42,7 @@ const cards = [
   },
   {
     title: '实践演练',
-    description: '通过真实的案例和模拟环境，将理论知识转化为实践技能。',
+    description: '通过课堂实践与教学模拟终端，把抽象的 AI 原理变成看得见的现象。',
     svgPath: 'M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z',
     buttonText: '开始实践',
     buttonClass: 'btn-primary',
@@ -116,10 +116,14 @@ const particles = Array.from({ length: 50 }, (_, i) => ({
       <!-- 欢迎区域 -->
       <div class="text-center mb-16" :class="{ 'animate-slide-down': isLoaded }">
         <div class="inline-block mb-6">
-          <div class="text-sm font-semibold text-primary/80 mb-2 tracking-wider uppercase"><i class="fas fa-shield-alt mr-2"></i>Sec Lab</div>
-          <h1 class="text-6xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-primary via-secondary to-accent leading-tight">开启你的安全实验之旅</h1>
+          <div class="text-sm font-semibold text-primary/80 mb-2 tracking-wider uppercase"><i class="fas fa-brain mr-2"></i>AI Micro Course</div>
+          <div class="inline-flex items-center gap-2 px-4 py-1.5 mb-5 rounded-full bg-primary/10 text-primary text-sm font-medium">
+            <i class="fas fa-graduation-cap"></i>
+            立心 LMS 学习管理平台
+          </div>
+          <h1 class="text-6xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-primary via-secondary to-accent leading-tight">开启你的 AI 探索之旅</h1>
         </div>
-        <p class="text-xl text-base-content/80 max-w-3xl mx-auto leading-relaxed">在这里，你将开启一段精彩的网络安全学习之旅。我们提供专业的课程内容和实践机会， 帮助你掌握必要的网络安全技能。</p>
+        <p class="text-xl text-base-content/80 max-w-3xl mx-auto leading-relaxed">「立心之约」中学生人工智能微课十讲，由北京大学名师带你从机器学习、计算机视觉一路走到智能机器人与 AI 音乐，看懂人工智能的过去、现在与未来。</p>
       </div>
 
       <!-- 功能卡片区域 -->

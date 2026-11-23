@@ -11,6 +11,8 @@ import hmac
 import json
 import logging
 import os
+
+logger = logging.getLogger(__name__)
 import re
 import time
 import httpx
@@ -22,7 +24,12 @@ from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel, Field
 from typing import Optional, Any, List
 
-from config import DIFY_API_URL, DIFY_API_KEY, CORS_ORIGINS, SERVICE_HOST, SERVICE_PORT
+from config import CORS_ORIGINS, SERVICE_HOST, SERVICE_PORT
+import config
+import course_context
+import llm_client
+import video_companion_service
+import answer_coach_service
 import docker_tools
 import operation_env
 import operation_session_repository as operation_session_repo
@@ -279,9 +286,14 @@ class ChatRequest(BaseModel):
     conversation_id: Optional[str] = ""
     user: Optional[str] = "student"
     inputs: Optional[dict] = {}
-    # 出站模式：后端在转发给 Dify 前主动读取容器日志并拼进 query，
-    # 避免 Dify 云端回调本地工具（需要公网穿透）。
-    # 前端传入当前靶机容器名即可；不传则原样转发。
+    # 教学模拟终端最近若干行输出，AI 助手据此分析学生的操作步骤
+    terminal_log: Optional[str] = None
+    log_source: Optional[str] = None
+    # 课程上下文：让 AI 对话前就知道当前在学哪一讲、有什么任务与题目
+    lab_context: Optional[dict] = None
+    # 视频伴侣：学生当前播放到第几讲、多少秒，用于注入视频转写上下文
+    videoPosition: Optional[dict] = None
+    # 兼容旧版靶场：传入 container_name 时仍读取 Docker 容器日志（已逐步停用）。
     container_name: Optional[str] = None
     log_tail: Optional[int] = 50
 
@@ -1235,36 +1247,36 @@ async def health():
     return {"status": "ok", "service": "SecLab AI Agent Service"}
 
 
-async def _probe_dify_configuration() -> dict[str, Any]:
-    if not DIFY_API_URL or not DIFY_API_KEY:
+async def _probe_llm_configuration() -> dict[str, Any]:
+    if not llm_client.is_configured():
         return {
             "configured": False,
             "providerReachable": False,
-            "message": "Dify 尚未配置。",
+            "message": "大模型尚未配置，请设置 LLM_API_BASE / LLM_API_KEY / LLM_MODEL。",
         }
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=8.0)) as client:
-            response = await client.get(
-                f"{DIFY_API_URL.rstrip('/')}/parameters",
-                headers={"Authorization": f"Bearer {DIFY_API_KEY}"},
+            response = await client.post(
+                llm_client._endpoint(),
+                headers=llm_client._headers(),
+                json={"model": config.LLM_MODEL, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 1},
             )
             response.raise_for_status()
+        reachable = True
     except httpx.HTTPError:
-        return {
-            "configured": True,
-            "providerReachable": False,
-            "message": "Dify 已配置，但当前无法连接。",
-        }
+        reachable = False
     return {
         "configured": True,
-        "providerReachable": True,
-        "message": "Dify 连接正常。",
+        "providerReachable": reachable,
+        "message": "大模型接口连接正常。" if reachable else "大模型已配置，但当前无法连接。",
+        "provider": config.LLM_API_BASE,
+        "model": config.LLM_MODEL,
     }
 
 
 @app.get("/health/ai-analysis")
 async def ai_analysis_health():
-    return await _probe_dify_configuration()
+    return await _probe_llm_configuration()
 
 
 # ─────────────────────────────────────────
@@ -1400,30 +1412,19 @@ async def receive_lab_event(event: LabEventRequest):
 
         auto_prompt = f"{event.prompt}{log_text}"
 
-    # 若需要自动触发，异步向 Dify 发送消息
+    # 若需要自动触发，异步调用本地 agent（不阻塞靶机请求）
     if auto_prompt:
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                await client.post(
-                    f"{DIFY_API_URL}/chat-messages",
-                    headers={
-                        "Authorization": f"Bearer {DIFY_API_KEY}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "query": auto_prompt,
-                        "response_mode": "blocking",
-                        "conversation_id": "",
-                        "user": f"lab-event-{event.container or 'unknown'}",
-                        "inputs": {
-                            "event_type": event.type,
-                            "container": event.container or "",
-                            "level": str(event.level or ""),
-                        },
-                    },
-                )
+            await llm_client.chat_text(
+                llm_client.build_messages(
+                    "你是 AI 课程学习助手，请根据学生操作事件给出简短引导。",
+                    f"{auto_prompt}\n事件类型：{event.type}\n环境：{event.container or ''}\n关卡：{event.level or ''}",
+                ),
+                max_tokens=512,
+                timeout=30,
+            )
         except Exception:
-            pass  # 不阻塞靶机请求，静默失败
+            pass  # 静默失败，避免影响主流程
 
     return {
         "status": "ok",
@@ -1440,7 +1441,7 @@ async def get_lab_events(
     event_type: Optional[str] = Query(None, description="按事件类型过滤"),
     _: None = Security(verify_tool_key),
 ):
-    """查询靶机事件历史（供 Dify 工具或管理员调用）"""
+    """查询靶机事件历史（供管理员调用）"""
     normalized_event_type = _normalize_lab_event_filter(event_type)
     try:
         result = list_learning_events(
@@ -2429,6 +2430,74 @@ async def teacher_generated_question_summary(
         raise _teacher_repo_error(exc)
 
 
+# ─────────────────────────────────────────
+#  AI 答题陪练：按要点评分 / 分步提示 / 变式题
+# ─────────────────────────────────────────
+class AnswerGradeRequest(BaseModel):
+    question: str
+    answer: str
+    reference: str = ""
+    analysis: str = ""
+
+
+class AnswerHintRequest(BaseModel):
+    question: str
+    answer: str = ""
+    reference: str = ""
+    step: int = 1
+
+
+class VariantRequest(BaseModel):
+    question: dict
+    seed: int = 0
+
+
+@app.post("/api/coach/grade")
+async def coach_grade(req: AnswerGradeRequest):
+    """简答题按要点评分，返回命中/遗漏要点与改进建议。"""
+    return await answer_coach_service.grade_answer(
+        req.question, req.answer, req.reference, req.analysis
+    )
+
+
+@app.post("/api/coach/hint")
+async def coach_hint(req: AnswerHintRequest):
+    """苏格拉底式分步提示，不直接给答案。"""
+    return {"hint": await answer_coach_service.give_hint(
+        req.question, req.answer, req.reference, req.step
+    )}
+
+
+@app.post("/api/coach/variant")
+async def coach_variant(req: VariantRequest):
+    """生成同知识点的变式题。"""
+    return await answer_coach_service.generate_variant(req.question, req.seed)
+
+
+# ─────────────────────────────────────────
+#  视频伴侣：章节索引 / 摘要 / 播放位置上下文
+# ─────────────────────────────────────────
+@app.get("/api/video/chapters")
+async def video_chapters(lecture: int = Query(..., ge=1, le=10)):
+    """返回某一讲的章节索引，前端点击可跳转到对应播放时间。"""
+    return {"lecture": lecture, "chapters": video_companion_service.list_chapters(lecture)}
+
+
+@app.get("/api/video/summary")
+async def video_summary(lecture: int = Query(..., ge=1, le=10)):
+    """返回某一讲的三分钟导读摘要（LLM 生成，进程内缓存）。"""
+    return {"lecture": lecture, "summary": await video_companion_service.get_summary(lecture)}
+
+
+@app.get("/api/video/context")
+async def video_context(
+    lecture: int = Query(..., ge=1, le=10),
+    seconds: int = Query(0, ge=0),
+):
+    """取播放时刻附近的转写片段，用于讲中答疑。"""
+    return video_companion_service.context_at(lecture, seconds)
+
+
 @app.get("/api/knowledge-units")
 async def knowledge_units(
     moduleId: Optional[int] = Query(default=None),
@@ -2794,14 +2863,58 @@ def extract_recent_http_responses(container_name: str, logs: str, max_requests: 
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
     """
-    接收前端消息，流式转发至 Dify Agent，并将 SSE 事件原样推送给前端。
+    本地 Agent 对话：直连外部大模型（OpenAI 兼容 /chat/completions），SSE 流式返回。
 
-    出站模式：若前端传入 container_name，后端会先读取该容器最近日志并拼进 query，
-    这样 Dify Agent 在 prompt 中即可看到日志，无需回调本地 Docker 工具（不需要公网穿透）。
+    - lab_context：当前课程/任务/题目，注入 system prompt（对话前让 AI 知道在学什么）
+    - terminal_log：教学模拟终端最近输出，拼进 user message，实现基于日志的个性化对话
+    - 本地 RAG：从知识库/标准题库检索，补充到 system prompt
+    兼容模式：若仅传入 container_name，则读取该容器日志（旧靶场遗留，逐步停用）。
     """
-    # 出站模式：后端主动读容器日志 + 提取最近请求的响应内容，拼进 query
-    enriched_query = req.query
-    if req.container_name:
+    # 课程上下文注入：把"当前在学哪讲、什么任务、哪些题目"写进 system prompt
+    lab_context = req.lab_context or {}
+    knowledge_units: list = []
+    standard_questions: list = []
+    module_id = lab_context.get("moduleId") or lab_context.get("experimentId")
+    course_id = lab_context.get("courseId")
+    if module_id is not None or course_id is not None:
+        try:
+            if config.ENABLE_LOCAL_RAG:
+                kb_result = list_knowledge_units(
+                    module_id=int(module_id) if module_id is not None else None,
+                    course_id=int(course_id) if course_id is not None else None,
+                ) or {}
+                knowledge_units = kb_result.get("items", []) if isinstance(kb_result, dict) else (kb_result or [])
+                standard_questions = [
+                    standard_questions_to_jsonable(q)
+                    for q in list_standard_questions(
+                        module_id=int(module_id) if module_id is not None else None,
+                        course_id=int(course_id) if course_id is not None else None,
+                    )[:5]
+                ]
+        except Exception as exc:  # MySQL 不可用时降级为纯前端上下文
+            logger.warning("本地 RAG 检索失败，跳过：%s", exc)
+
+    system_prompt = course_context.build_system_prompt(
+        lab_context,
+        knowledge_units=knowledge_units,
+        standard_questions=standard_questions,
+    )
+    enriched_query = course_context.build_user_prompt(
+        req.query, req.terminal_log, req.log_tail or 80
+    )
+
+    # 视频伴侣：把播放时刻附近的课程录像转写注入对话
+    if req.videoPosition:
+        try:
+            v_lecture = int(req.videoPosition.get("lecture") or 0)
+            v_seconds = int(req.videoPosition.get("seconds") or 0)
+            if 1 <= v_lecture <= 10:
+                enriched_query += video_companion_service.build_video_context(v_lecture, v_seconds)
+        except (TypeError, ValueError):
+            pass
+
+    # 兼容旧版靶场：仅当未提交 terminal_log 且显式传入 container_name 时才读 Docker 日志。
+    if not req.terminal_log and req.container_name:
         tail = req.log_tail or 50
         log_result = docker_tools.get_container_logs(req.container_name, tail=tail)
         if log_result.get("success") and log_result.get("logs"):
@@ -2845,47 +2958,21 @@ async def chat(req: ChatRequest):
                 f"【系统提示：读取容器 {req.container_name} 日志失败 - {log_result.get('error', '未知错误')}】"
             )
 
-    headers = {
-        "Authorization": f"Bearer {DIFY_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "query": enriched_query,
-        "response_mode": "streaming",
-        "conversation_id": req.conversation_id or "",
-        "user": req.user or "student",
-        "inputs": req.inputs or {},
-    }
+    conversation_id = req.conversation_id or ""
+    user = req.user or "student"
+    # 多轮上下文：由前端维护 conversation_id，后端这里用 system prompt + 当前问题即可。
+    # 若后续需要服务端会话历史，可在 ai_repository 里按 conversation_id 读取并注入。
+    messages = llm_client.build_messages(system_prompt, enriched_query)
 
     async def event_stream():
-        # 用 try/except 包裹整个 Dify 调用，避免在 200 响应头已发出后
-        # 因连接异常（网络不可达 / TLS 失败 / 超时）导致生成器崩溃，
-        # 进而触发浏览器的 ERR_INCOMPLETE_CHUNKED_ENCODING。
-        # 出错时改为 yield 一条标准 SSE 错误事件，让流正常结束。
         try:
-            async with httpx.AsyncClient(timeout=120.0) as client:
-                async with client.stream(
-                    "POST",
-                    f"{DIFY_API_URL}/chat-messages",
-                    headers=headers,
-                    json=payload,
-                ) as response:
-                    if response.status_code != 200:
-                        body = await response.aread()
-                        error_msg = body.decode("utf-8", errors="replace")
-                        yield f"data: {json.dumps({'error': error_msg})}\n\n"
-                        return
-                    async for line in response.aiter_lines():
-                        if line:
-                            yield f"{line}\n\n"
-        except httpx.ConnectError as exc:
-            yield f"data: {json.dumps({'error': f'无法连接到 Dify 服务 ({DIFY_API_URL})：{exc}. 请检查网络或 DIFY_API_URL/DIFY_API_KEY 配置。'})}\n\n"
-        except httpx.TimeoutException as exc:
-            yield f"data: {json.dumps({'error': f'连接 Dify 服务超时：{exc}。请稍后重试。'})}\n\n"
-        except httpx.HTTPError as exc:
-            yield f"data: {json.dumps({'error': f'调用 Dify 服务时发生 HTTP 错误：{exc}'})}\n\n"
-        except Exception as exc:
-            yield f"data: {json.dumps({'error': f'AI 助手响应异常：{exc}'})}\n\n"
+            async for event in llm_client.stream_chat(
+                messages, user=user, conversation_id=conversation_id
+            ):
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        except Exception as exc:  # noqa: BLE001 - 流中不能抛异常
+            logger.exception("chat stream failed")
+            yield f"data: {json.dumps({'event': 'error', 'message': f'AI 助手响应异常：{exc}'}, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 

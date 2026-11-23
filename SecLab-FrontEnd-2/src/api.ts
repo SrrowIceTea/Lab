@@ -8,7 +8,7 @@ import type { ModuleOverViewType } from "./pages/User/Modules/components/ModuleO
 import type { Course } from "./pages/User/Course/index.ts";
 import { CourseStatus } from "./pages/User/Course/index.ts";
 import type { Module } from "./pages/User/Module/index.ts";
-import { findExperimentById } from './data';
+import { findAiModuleById } from './data/aiModules';
 
 // 可配置的API基础URL
 // 优先使用环境变量，如果没有则使用默认值
@@ -698,6 +698,7 @@ export interface CourseSummaryDto {
     type: string;
     tags: string[];
     status: string;
+    estimatedHours?: number;
     createdBy?: number | null;
     creatorEditable?: boolean;
 }
@@ -3099,52 +3100,28 @@ export async function getModuleDetail(id:number): Promise<Result<Module>> {
     return getFallbackModuleDetail(id);
 }   
 
-// 提供硬编码的备用模块数据
+// AI 微课实践模块数据（来自本地 aiModules.ts，不依赖后端靶场接口）
 function getFallbackModuleDetail(id: number): Result<Module> {
-    // 尝试从我们的备用数据中查找对应ID的实验
-    const experiment = findExperimentById(Number(id));
-    
-    if (experiment) {
-        // 确保experiment的结构符合Module接口
-        const moduleData = {
-            id: experiment.id,
-            name: experiment.name,
-            introduction: experiment.introduction,
-            difficulty: experiment.difficulty,
-            taskPoints: experiment.taskPoints.map(task => ({
-                ...task,
-                questions: task.questions || []
-            })),
-            targetMachine: experiment.targetMachine
-        };
-        
+    const aiModule = findAiModuleById(id)
+    if (!aiModule) {
         return {
-            isSuccess: 1,
-            status: 200,
-            message: "success",
-            data: moduleData as any
-        };
-    } else {
-        // 如果找不到对应ID的实验，返回默认的SQL注入实验（ID为1）
-        const defaultExperiment = findExperimentById(1);
-        const moduleData = {
-            id: id, // 使用请求的ID
-            name: defaultExperiment?.name || "SQL注入基础实验",
-            introduction: defaultExperiment?.introduction || "SQL注入基础实验介绍",
-            difficulty: defaultExperiment?.difficulty || 3,
-            taskPoints: (defaultExperiment?.taskPoints || []).map(task => ({
-                ...task,
-                questions: task.questions || []
-            })),
-            targetMachine: defaultExperiment?.targetMachine || { id: "default-machine" }
-        };
-        
-        return {
-            isSuccess: 1,
-            status: 200,
-            message: "success",
-            data: moduleData as any
-        };
+            isSuccess: 0,
+            status: 404,
+            message: "未找到该实践模块",
+            data: null as any
+        }
+    }
+    return {
+        isSuccess: 1,
+        status: 200,
+        message: "success",
+        data: {
+            id: aiModule.id,
+            name: aiModule.name,
+            introduction: aiModule.introduction,
+            difficulty: aiModule.difficulty,
+            taskPoints: aiModule.taskPoints
+        } as any
     }
 }
 

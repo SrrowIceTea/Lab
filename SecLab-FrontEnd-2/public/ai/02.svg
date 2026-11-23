@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450" viewBox="0 0 800 450" role="img" aria-label="第2讲">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2a1a6b"/>
+      <stop offset="1" stop-color="#7c3aed"/>
+    </linearGradient>
+    <linearGradient id="bar" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#c4b5fd" stop-opacity=".35"/>
+      <stop offset="1" stop-color="#c4b5fd" stop-opacity=".95"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#c4b5fd" stop-opacity=".42"/>
+      <stop offset="1" stop-color="#c4b5fd" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0 L0 0 0 40" fill="none" stroke="#ffffff" stroke-opacity=".07" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <rect width="800" height="450" fill="url(#bg)"/>
+  <rect width="800" height="450" fill="url(#grid)"/>
+  <circle cx="620" cy="210" r="260" fill="url(#glow)"/>
+  <text x="742" y="410" text-anchor="end" font-family="'Microsoft YaHei',sans-serif" font-size="200" font-weight="700" fill="#ffffff" opacity=".06">02</text>
+
+  <g><path d="M470 225 Q580 120 690 225 Q580 330 470 225 Z" fill="none" stroke="#fff" stroke-width="4" opacity=".9"/>
+  <circle cx="580" cy="225" r="52" fill="none" stroke="#fff" stroke-width="4" opacity=".9"/>
+  <circle cx="580" cy="225" r="20" fill="#fff" opacity=".9"/>
+  <path d="M500 138 L470 104" stroke="#fff" stroke-width="3" opacity=".35"/><path d="M554 138 L530 104" stroke="#fff" stroke-width="3" opacity=".35"/><path d="M608 138 L590 104" stroke="#fff" stroke-width="3" opacity=".35"/>
+  <rect x="466" y="112" width="230" height="228" rx="14" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="10 12" opacity=".28"/>
+  <circle cx="466" cy="112" r="5" fill="#fff" opacity=".8"/><circle cx="696" cy="112" r="5" fill="#fff" opacity=".8"/><circle cx="466" cy="340" r="5" fill="#fff" opacity=".8"/><circle cx="696" cy="340" r="5" fill="#fff" opacity=".8"/>
+  </g>
+
+  <rect x="58" y="58" width="126" height="34" rx="17" fill="#ffffff" fill-opacity=".16" stroke="#ffffff" stroke-opacity=".34"/>
+  <text x="121" y="81" text-anchor="middle" font-family="'Microsoft YaHei',sans-serif" font-size="17" font-weight="600" fill="#ffffff">第 2 讲</text>
+
+  <text x="58" y="184" font-family="'Microsoft YaHei','PingFang SC',sans-serif" font-size="46" font-weight="700" fill="#ffffff">机器眼中的</text><text x="58" y="244" font-family="'Microsoft YaHei','PingFang SC',sans-serif" font-size="46" font-weight="700" fill="#ffffff">大千世界</text>
+  <rect x="58" y="270" width="52" height="4" rx="2" fill="#c4b5fd"/>
+  <text x="58" y="310" font-family="'Segoe UI',Arial,sans-serif" font-size="14" letter-spacing="2.6" font-weight="600" fill="#ffffff" fill-opacity=".72">COMPUTER VISION</text>
+
+  <rect x="0" y="440" width="800" height="10" fill="#c4b5fd" opacity=".85"/>
+</svg>

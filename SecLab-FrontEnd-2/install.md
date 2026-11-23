@@ -1,10 +1,10 @@
-# SecLab-FrontEnd 安装文档
+# 立心 LMS 学习管理平台 安装文档
 
-本文档提供了安装和运行 SecLab-FrontEnd 项目的详细说明，包括常规安装方法和 Docker 容器化部署方法。
+本文档提供了安装和运行「立心 LMS 学习管理平台」前端项目的详细说明，包括常规安装方法和 Docker 容器化部署方法。
 
 ## 项目概述
 
-SecLab-FrontEnd 是一个基于 Vue 3 + TypeScript + Vite 构建的网络安全漏洞综合实验平台前端项目。项目使用了以下主要技术栈：
+立心 LMS 是一个基于 Vue 3 + TypeScript + Vite 构建的中学生人工智能微课学习管理平台前端项目。项目使用了以下主要技术栈：
 
 - 前端框架: Vue 3
 - 构建工具: Vite
@@ -33,7 +33,7 @@ SecLab-FrontEnd 是一个基于 Vue 3 + TypeScript + Vite 构建的网络安全�
 
 ```bash
 git clone <项目仓库URL>
-cd SecLab-FrontEnd
+cd 立心-LMS-前端
 ```
 
 ### 2. 安装依赖
@@ -178,7 +178,7 @@ docker-compose up -d
 
 ```
 VITE_API_BASE_URL=http://api.example.com
-VITE_APP_TITLE=SecLab平台
+VITE_APP_TITLE=立心 LMS 学习管理平台
 ```
 
 ## 常见问题解决
